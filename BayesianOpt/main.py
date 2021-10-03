@@ -15,7 +15,7 @@ from optuna.samplers import TPESampler
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
-    parser.add_argument('--config_path', default='RLSubsystem/BayesianOpt/test_config.yaml')
+    parser.add_argument('--config_path', default='BayesianOpt/test_config.yaml')
     args = parser.parse_args()
     return args
 
@@ -36,6 +36,8 @@ class HpTuningType(Enum):
     CATEGORICAL = auto()
     UNIFORM_INT = auto()
     UNIFORM_FLOAT = auto()
+    LOG_UNIFORM_FLOAT = auto()
+    LOG_UNIFORM_INT = auto()
 
 class BayesianOptimAlgorithm:
     def __init__(self, config):
@@ -55,8 +57,12 @@ class BayesianOptimAlgorithm:
                 val = trial.suggest_categorical(hyperparam, values)
             elif hpTuningType==HpTuningType.UNIFORM_FLOAT:
                 val = trial.suggest_float(hyperparam, values[0], values[1])
+            elif hpTuningType==HpTuningType.LOG_UNIFORM_FLOAT:
+                val = trial.suggest_float(hyperparam, values[0], values[1], log=True)
             elif hpTuningType==HpTuningType.UNIFORM_INT:
                 val = trial.suggest_int(hyperparam, values[0], values[1])
+            elif hpTuningType==HpTuningType.LOG_UNIFORM_INT:
+                val = trial.suggest_int(hyperparam, values[0], values[1], log=True)
             else:
                 raise NotImplementedError(f'{hpTuningType}: Unknown type of hyperparameter')
             
@@ -100,16 +106,27 @@ class BayesianOptimAlgorithm:
                     if k in self.hyperparams_path:
                         raise Exception(f'Duplicated hyperparameters found!, hyperparameter: {k}')
                     self.hyperparams_path[k] = path+[k]
-                # if it contains the substring "unif(" and ")", its a continuous hyperparameter to tune
-                elif isinstance(v, str) and v[:5]=='unif(' and v[-1]==')':
-                    list_ = v[5:-1].split(',')
+                # if it contains the substring "unif(" and ")" or "log_unif(" and ")", its a continuous hyperparameter to tune
+                elif isinstance(v, str) and '(' in v and ')' in v:
+                    assert v[-1]==')', 'Continuous hyperparameter must end in ")"'
+                    index = v.find('(')
+                    list_ = v[index+1:-1].split(',')
                     assert(len(list_)==2), f'Parsing "{v}" for hyperparameter "{k}" failed; Continuous hyperparameter(s) must only contain 2 numerical values!'
                     low, high = float(list_[0]), float(list_[1])
                     assert(low<high), f'Parsing "{v}" for hyperparameter "{k}" failed; First value must be smaller than the second!'
-                    if low.is_integer() and high.is_integer():
-                        self.hyperparameters_to_tune.append((k, HpTuningType.UNIFORM_INT, (int(low), int(high))))
+                    
+                    if v[:index]=='unif':
+                        if low.is_integer() and high.is_integer():
+                            self.hyperparameters_to_tune.append((k, HpTuningType.UNIFORM_INT, (int(low), int(high))))
+                        else:
+                            self.hyperparameters_to_tune.append((k, HpTuningType.UNIFORM_FLOAT, (low, high)))
+                    elif v[:index]=='log_unif':
+                        if low.is_integer() and high.is_integer():
+                            self.hyperparameters_to_tune.append((k, HpTuningType.LOG_UNIFORM_INT, (int(low), int(high))))
+                        else:
+                            self.hyperparameters_to_tune.append((k, HpTuningType.LOG_UNIFORM_FLOAT, (low, high)))
                     else:
-                        self.hyperparameters_to_tune.append((k, HpTuningType.UNIFORM_FLOAT, (low, high)))
+                        raise NotImplementedError(f'"{v[:index]}" method not implemented!')
                     self.hyperparams_path[k] = path+[k]
                 # recursively parse nested dictionary
                 elif isinstance(v, dict):
@@ -137,7 +154,7 @@ class BayesianOptimAlgorithm:
             raise Exception(f"Error querying tensorboard on port 6006 for run_id:{run_id}")
         response = r.json()
         _,_,cumulative_reward = zip(*response)
-        return statistics.mean(cumulative_reward[-5:])
+        return statistics.mean(cumulative_reward[-int(self.config['realm_ai'].get('eval_window_size', 1)):])
 
     def run_from_scratch(self, run_id=None) -> optuna.Study:
         self.folder = run_id

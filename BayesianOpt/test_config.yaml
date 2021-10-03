@@ -3,11 +3,12 @@ realm_ai:
   algorithm: grid
   num_trials: 10
   warmup_trials: 5 # number of "warmup" trials where random hyperparams are used
+  eval_window_size: 3 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
   run_id: test # optional, specify to continue running
 
 mlagents:
   env_settings:
-    env_path: ../../../Unity/envs/3dball/3dball
+    env_path: ../../../../Unity/envs/3dball/3dball
     env_args: null
     num_envs: 4
     seed: 0
@@ -29,13 +30,13 @@ mlagents:
   default_settings:
     trainer_type: ppo
     hyperparameters:
-      batch_size: [64, 128, 256]
-      buffer_size: unif(2000, 12000)
-      learning_rate: unif(0.0003, 0.001)
-      beta: [0.001, 0.01]
+      batch_size: [64, 128, 256] # Means categorical
+      buffer_size: log_unif(2000, 12000) # Automatic detection as int
+      learning_rate: log_unif(0.0003, 0.01) # Automatic detection as float
+      beta: log_unif(0.001, 0.01) # unif and log_unif exclude upper bound - [0.001, 0.01)
       epsilon: 0.2
       lambd: 0.99
-      num_epoch: 3
+      num_epoch: unif(1, 15)
       learning_rate_schedule: linear
     network_settings:
       normalize: true
