@@ -3,7 +3,7 @@ import yaml
 from copy import deepcopy
 import os
 import subprocess 
-import uuid
+import time
 import statistics
 from enum import Enum, auto
 import pickle
@@ -19,19 +19,6 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
-def load_config(path: str):
-    def assert_config_structure():
-        assert('realm_ai' in config and 'mlagents' in config)
-    
-    try:
-        with open(path) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-    except FileNotFoundError:
-        raise Exception(f'Could not load configuration from {path}.')
-    
-    assert_config_structure()
-    return config
-
 class HpTuningType(Enum):
     CATEGORICAL = auto()
     UNIFORM_INT = auto()
@@ -40,11 +27,24 @@ class HpTuningType(Enum):
     LOG_UNIFORM_INT = auto()
 
 class BayesianOptimAlgorithm:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config_file_path):
+        self.load_config(config_file_path)
         self.find_hyperparameters_to_tune()
         self.tensorboard_url = None
     
+    def load_config(self, path: str):
+        def assert_config_structure():
+            assert('realm_ai' in config and 'mlagents' in config)
+        
+        try:
+            with open(path) as f:
+                config = yaml.load(f, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            raise Exception(f'Could not load configuration from {path}.')
+        
+        assert_config_structure()
+        self.config = config
+
     def __call__(self, trial: optuna.trial.Trial) -> float:
         '''
         Optuna's objective function
@@ -149,7 +149,7 @@ class BayesianOptimAlgorithm:
 
     def __evaluate(self, run_id) -> int: 
         tb_query_url = f'{self.tensorboard_url}data/plugin/scalars/scalars'
-        r = requests.get(tb_query_url, params={"run":f"{run_id}/{config['realm_ai']['behavior_name']}", "tag":"Environment/Cumulative Reward"})
+        r = requests.get(tb_query_url, params={"run":f"{run_id}/{self.config['realm_ai']['behavior_name']}", "tag":"Environment/Cumulative Reward"})
         if r.status_code != requests.codes.ok:
             raise Exception(f"Error querying tensorboard on port 6006 for run_id:{run_id}")
         response = r.json()
@@ -158,12 +158,14 @@ class BayesianOptimAlgorithm:
 
     def run_from_scratch(self, run_id=None) -> optuna.Study:
         self.folder = run_id
-        while self.folder is None or os.path.isdir(self.folder):
-            self.folder = f'runs-{uuid.uuid4().hex[:6]}'
+        if self.folder is None:
+            self.folder = f'{self.config["realm_ai"]["behavior_name"]}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
         
-        print('Creating folder named', self.folder)
-        
-        os.mkdir(self.folder)
+        if os.path.isdir(self.folder):
+            raise FileExistsError(f'"{self.folder}/" already exists, please rename run_id in config file, or delete the folder!')
+        else:
+            print('Creating folder named', self.folder)
+            os.mkdir(self.folder)
 
         os.chdir(self.folder)
 
@@ -225,8 +227,7 @@ class BayesianOptimAlgorithm:
 
 if __name__ == "__main__":
     args = parse_arguments()
-    config = load_config(args.config_path)
-    alg = BayesianOptimAlgorithm(config)
+    alg = BayesianOptimAlgorithm(args.config_path)
     alg.run()
 
     
