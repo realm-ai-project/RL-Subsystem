@@ -1,4 +1,5 @@
 import argparse
+from optuna import samplers
 import yaml
 from copy import deepcopy
 import os
@@ -12,11 +13,11 @@ import shutil
 import requests
 from tensorboard import program
 import optuna
-from optuna.samplers import TPESampler
+from optuna.samplers import TPESampler, RandomSampler, GridSampler
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
-    parser.add_argument('--config_path', default='BayesianOpt/test_config.yaml')
+    parser.add_argument('--config_path', default='BayesianOpt/bayes.yaml')
     args = parser.parse_args()
     return args
 
@@ -36,6 +37,8 @@ class BayesianOptimAlgorithm:
     def load_config(self, path: str):
         def assert_config_structure():
             assert('realm_ai' in config and 'mlagents' in config)
+            self.algo = config['realm_ai'].get('algorithm', 'bayes')
+            assert self.algo in ['bayes', 'grid', 'random']
         
         try:
             with open(path) as f:
@@ -109,6 +112,7 @@ class BayesianOptimAlgorithm:
                     self.hyperparams_path[k] = path+[k]
                 # if it contains the substring "unif(" and ")" or "log_unif(" and ")", its a continuous hyperparameter to tune
                 elif isinstance(v, str) and '(' in v and ')' in v:
+                    assert self.algo!='grid', f'Continuous hyperparameters "{k}" not allowed in grid search!'
                     assert v[-1]==')', 'Continuous hyperparameter must end in ")"'
                     index = v.find('(')
                     list_ = v[index+1:-1].split(',')
@@ -152,10 +156,20 @@ class BayesianOptimAlgorithm:
         tb_query_url = f'{self.tensorboard_url}data/plugin/scalars/scalars'
         r = requests.get(tb_query_url, params={"run":f"{run_id}/{self.config['realm_ai']['behavior_name']}", "tag":"Environment/Cumulative Reward"})
         if r.status_code != requests.codes.ok:
-            raise Exception(f"Error querying tensorboard on port 6006 for run_id:{run_id}")
+            print(f"Error querying tensorboard on port 6006 for run_id:{run_id}")
+            r.raise_for_status()
         response = r.json()
         _,_,cumulative_reward = zip(*response)
         return statistics.mean(cumulative_reward[-int(self.config['realm_ai'].get('eval_window_size', 1)):])
+
+    def __get_sampler(self)-> optuna.samplers.BaseSampler:
+        if self.algo == 'bayes':
+            return TPESampler(n_startup_trials=self.config['realm_ai']['warmup_trials']) # TODO: change to have default values instead when loading config
+        elif self.algo == 'random':
+            return RandomSampler()
+        elif self.algo == 'grid':
+            search_space = {i:v for i, _, v in self.hyperparameters_to_tune}
+            return GridSampler(search_space)
 
     def run_from_scratch(self, run_id=None) -> optuna.Study:
         self.folder = run_id
@@ -163,14 +177,14 @@ class BayesianOptimAlgorithm:
             self.folder = f'{self.config["realm_ai"]["behavior_name"]}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
         
         if os.path.isdir(self.folder):
-            raise FileExistsError(f'"{self.folder}/" already exists, please rename run_id in config file, or delete the folder!')
+            raise FileExistsError(f'"{self.folder}/" already exists, and no checkpoint exists in that folder. Please rename run_id in config file, or delete the folder!')
         else:
             print('Creating folder named', self.folder)
             os.mkdir(self.folder)
 
         os.chdir(self.folder)
 
-        sampler = TPESampler(n_startup_trials=self.config['realm_ai']['warmup_trials'])
+        sampler = self.__get_sampler()
         study = optuna.create_study(study_name=self.folder, sampler=sampler, direction="maximize")
         return study
 
@@ -180,7 +194,7 @@ class BayesianOptimAlgorithm:
 
         os.chdir(self.folder)
 
-        sampler = TPESampler(n_startup_trials=self.config['realm_ai']['warmup_trials'])
+        sampler = self.__get_sampler()
         new_study = optuna.create_study(study_name=self.folder, sampler=sampler, direction="maximize")
         study = pickle.load( open( "optuna_study.pkl", "rb" ) )
         for trial in study.trials:
@@ -212,14 +226,14 @@ class BayesianOptimAlgorithm:
 
         trial = study.best_trial
         best_trial_name = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
-        print(f"Best trial: {best_trial_name}")
+        print(f"\nBest trial: {best_trial_name}")
 
-        print('\nSaving best trial to "best_trial" folder')    
         if os.path.isdir('best_trial'):
             shutil.rmtree('./best_trial')
         os.mkdir('best_trial')
         shutil.copytree(f"./results/{best_trial_name}", f"./best_trial/{best_trial_name}")
         shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
+        print('\nSaved {best_trial_name} to "best_trial" folder')    
 
 
 if __name__ == "__main__":
