@@ -233,7 +233,7 @@ class BayesianOptimAlgorithm:
         os.mkdir('best_trial')
         shutil.copytree(f"./results/{best_trial_name}", f"./best_trial/{best_trial_name}")
         shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
-        print('\nSaved {best_trial_name} to "best_trial" folder')    
+        print(f'\nSaved {best_trial_name} to "best_trial" folder')    
 
 
 if __name__ == "__main__":
