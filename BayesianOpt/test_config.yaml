@@ -4,7 +4,7 @@ realm_ai:
   num_trials: 10
   warmup_trials: 5 # number of "warmup" trials where random hyperparams are used
   eval_window_size: 3 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
-  run_id: test # optional, specify to continue running
+  run_id: test # optional, specify to manually specify folder name, or to continue running
 
 mlagents:
   env_settings:

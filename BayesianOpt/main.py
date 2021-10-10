@@ -7,6 +7,7 @@ import time
 import statistics
 from enum import Enum, auto
 import pickle
+import shutil 
 
 import requests
 from tensorboard import program
@@ -210,19 +211,15 @@ class BayesianOptimAlgorithm:
         print("Number of finished trials: ", len(study.trials))
 
         trial = study.best_trial
-        print(f"Best trial: {self.config['realm_ai']['behavior_name']}_{trial.number}")
+        best_trial_name = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
+        print(f"Best trial: {best_trial_name}")
 
-        print("  Value: ", trial.value)
-
-        print("  Params: ")
-        for key, value in trial.params.items():
-            print("    {}: {}".format(key, value))
-
-        print("  User attrs:")
-        for key, value in trial.user_attrs.items():
-            print("    {}: {}".format(key, value))
-
-    
+        print('\nSaving best trial to "best_trial" folder')    
+        if os.path.isdir('best_trial'):
+            shutil.rmtree('./best_trial')
+        os.mkdir('best_trial')
+        shutil.copytree(f"./results/{best_trial_name}", f"./best_trial/{best_trial_name}")
+        shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
 
 
 if __name__ == "__main__":
