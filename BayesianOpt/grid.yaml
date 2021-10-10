@@ -1,8 +1,8 @@
 realm_ai:
   behavior_name: 3DBallHard
   algorithm: grid
-  num_trials: 10
-  warmup_trials: 5 # number of "warmup" trials where random hyperparams are used
+  num_trials: 10 
+  warmup_trials: 5 # not used for grid algorithm
   eval_window_size: 3 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
   run_id: test # optional, specify to manually specify folder name, or to continue running
 
@@ -32,7 +32,7 @@ mlagents:
     hyperparameters:
       batch_size: [64, 128]
       buffer_size: 12000
-      learning_rate: 0.0003
+      learning_rate: [0.0003, 0.001]
       beta: [0.001, 0.01]
       epsilon: 0.2
       lambd: 0.99
