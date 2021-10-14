@@ -1,5 +1,4 @@
 import argparse
-from optuna import samplers
 import yaml
 from copy import deepcopy
 import os
@@ -28,7 +27,7 @@ class HpTuningType(Enum):
     LOG_UNIFORM_FLOAT = auto()
     LOG_UNIFORM_INT = auto()
 
-class BayesianOptimAlgorithm:
+class OptunaHyperparamTuner:
     def __init__(self, config_file_path):
         self.load_config(config_file_path)
         self.find_hyperparameters_to_tune()
@@ -238,7 +237,7 @@ class BayesianOptimAlgorithm:
 
 if __name__ == "__main__":
     args = parse_arguments()
-    alg = BayesianOptimAlgorithm(args.config_path)
+    alg = OptunaHyperparamTuner(args.config_path)
     alg.run()
 
     
