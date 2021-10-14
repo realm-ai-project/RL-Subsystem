@@ -214,16 +214,20 @@ class OptunaHyperparamTuner:
         else:
             study = self.run_from_scratch(run_id=self.config['realm_ai']['run_id'] if 'run_id' in self.config['realm_ai'] else None)
         
+        interrupted = False
         try:
             study.optimize(self, n_trials=self.config['realm_ai']['total_trials']-len(study.trials))
         except KeyboardInterrupt:
-            pass
+            interrupted = True
 
         pickle.dump(study, open( "optuna_study.pkl", "wb" ) )
         print('Saved study as optuna_study.pkl')
 
         print("Number of finished trials: ", len(study.trials))
-
+        
+        if interrupted: 
+            exit(0)
+        
         trial = study.best_trial
         best_trial_name = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
         print(f"\nBest trial: {best_trial_name}")
