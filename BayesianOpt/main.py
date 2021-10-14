@@ -38,7 +38,8 @@ class OptunaHyperparamTuner:
             assert('realm_ai' in config and 'mlagents' in config)
             self.algo = config['realm_ai'].get('algorithm', 'bayes')
             assert self.algo in ['bayes', 'grid', 'random']
-        
+            if 'checkpoint_settings' not in config['mlagents']:
+                config['mlagents']['checkpoint_settings'] = {}
         try:
             with open(path) as f:
                 config = yaml.load(f, Loader=yaml.FullLoader)
@@ -214,7 +215,7 @@ class OptunaHyperparamTuner:
             study = self.run_from_scratch(run_id=self.config['realm_ai']['run_id'] if 'run_id' in self.config['realm_ai'] else None)
         
         try:
-            study.optimize(self, n_trials=self.config['realm_ai']['num_trials'])
+            study.optimize(self, n_trials=self.config['realm_ai']['total_trials']-len(study.trials))
         except KeyboardInterrupt:
             pass
 
@@ -230,14 +231,33 @@ class OptunaHyperparamTuner:
         if os.path.isdir('best_trial'):
             shutil.rmtree('./best_trial')
         os.mkdir('best_trial')
-        shutil.copytree(f"./results/{best_trial_name}", f"./best_trial/{best_trial_name}")
         shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
         print(f'\nSaved {best_trial_name} to "best_trial" folder')    
+        return best_trial_name
 
+def configure_for_full_run(config, best_trial_name):
+    path = f"./best_trial/{best_trial_name}.yml"
+    try:
+        with open(path) as f:
+            hyperparam = yaml.load(f, Loader=yaml.FullLoader)
+    except FileNotFoundError:
+        raise Exception(f'Could not load configuration from {path}.')
+    # TODO: error checking for the following lines
+    hyperparam['default_settings']['max_steps'] = config['max_steps']
+    hyperparam['checkpoint_settings']['run_id'] = config['run_id']
+    hyperparam['checkpoint_settings']['resume'] = True
+    with open("./best_trial/full_run_config.yml", 'w') as f:
+        yaml.dump(hyperparam, f, default_flow_style=False) 
+    if os.path.isdir(f"./results/{config['run_id']}"):
+        raise FileExistsError(f"Results for full run (./results/{config['run_id']}) already exist!")
+    shutil.copytree(f"./results/{best_trial_name}", f"./results/{config['run_id']}")
 
 if __name__ == "__main__":
     args = parse_arguments()
     alg = OptunaHyperparamTuner(args.config_path)
-    alg.run()
+    best_trial_name = alg.run()
+    config = alg.config
+    if 'full_run_after_tuning' in config['realm_ai']:
+        configure_for_full_run(config['realm_ai']['full_run_after_tuning'], best_trial_name)
 
     

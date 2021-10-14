@@ -1,12 +1,15 @@
 realm_ai:
   behavior_name: 3DBallHard
   algorithm: bayes # or random
-  num_trials: 10
+  total_trials: 21 # total number of trials (inclusive of warmup_trials)
   warmup_trials: 5 # number of "warmup" trials where random hyperparams are used
   eval_window_size: 3 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
   run_id: test # optional, specify to manually specify folder name, or to continue running
+  full_run_after_tuning: # optional, if specified, config in "best_trial" folder will be changed to reflect the following. If this is specified, run_id should be specified so that we know the name of the folder!
+    max_steps: 20000 # number of steps to run for the full training
+    run_id: full_run # name of the complete training run
 
-mlagents:
+mlagents: # all values here (even those that are commented out) are used by the script. Other possible configs that are not here can be added at the discretion of the user.
   env_settings:
     env_path: ../../../../Unity/envs/3dball/3dball
     env_args: null
@@ -16,13 +19,9 @@ mlagents:
   engine_settings:
     no_graphics: true
   
-  checkpoint_settings:
-    # run_id: anything # does not matter, will be generated automatically
-    initialize_from: null
-    load_model: false
-    resume: false
-    force: false # does not matter, overwritten as True through cli argument
-    inference: false
+  # checkpoint_settings: 
+  #   run_id: anything # does not matter, will be generated automatically
+  #   force: false # does not matter, overwritten as True through cli argument
 
   # torch_settings:
   #   device: cpu
@@ -48,6 +47,6 @@ mlagents:
         gamma: [0.99, 0.95]
         strength: 1.0
     keep_checkpoints: 5
-    max_steps: 100000
+    max_steps: 10000
     time_horizon: 1000
     summary_freq: 5000
