@@ -209,6 +209,9 @@ class OptunaHyperparamTuner:
         1) Create and cd into new/existing folder 
         2) Create a new Optuna study using the TPESampler, or restore previously saved study
         '''
+        if not os.path.isdir('runs'):
+            os.mkdir('runs')
+        os.chdir('./runs')
         if 'run_id' in self.config['realm_ai'] and os.path.isdir(self.config['realm_ai']['run_id']) and os.path.isfile(f"{self.config['realm_ai']['run_id']}/optuna_study.pkl"):
             study = self.restore_from_checkpoint(self.config['realm_ai']['run_id'])
         else:
