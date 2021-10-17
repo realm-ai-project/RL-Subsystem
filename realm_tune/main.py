@@ -94,7 +94,7 @@ class OptunaHyperparamTuner:
         run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
 
         if self.use_wandb:
-            self.__init_wandb_run(run_id, log_config)
+            self.wandb_run = self.__init_wandb_run(run_id, log_config)
 
         self.__create_config_file(run_id, curr_config)
 
@@ -105,6 +105,11 @@ class OptunaHyperparamTuner:
 
         score = self.__evaluate(run_id)
         print(f'Score for trial {trial.number}: {score}')
+
+        if self.use_wandb:
+            wandb.log({"avg_reward":score})
+            self.wandb_run.finish()
+
         return score
 
     def find_hyperparameters_to_tune(self):
@@ -158,8 +163,11 @@ class OptunaHyperparamTuner:
         parse_recursively(hyperparameters, list())
 
     def __init_wandb_run(self, run_id, config):
-        wandb.tensorboard.patch(root_logdir=f"results/{run_id}/{self.config['realm_ai']['behavior_name']}", pytorch=True)
-        run = wandb.init(config=config, name=run_id, group=self.config['realm_ai']['behavior_name'])
+
+        wandb.tensorboard.patch(root_logdir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", pytorch=True)
+        run = wandb.init(config=config, name=run_id, group=self.config['realm_ai']['folder_name'], job_type='hyperparameter_optimization', reinit=True)
+        # wandb.s
+        return run
 
     def __create_config_file(self, run_id, config):
         '''
@@ -278,7 +286,8 @@ def configure_for_full_run(config, best_trial_name):
     with open("./best_trial/full_run_config.yml", 'w') as f:
         yaml.dump(hyperparam, f, default_flow_style=False) 
     if os.path.isdir(f"./results/{config['run_id']}"):
-        raise FileExistsError(f"Results for full run (./results/{config['run_id']}) already exist!")
+        print(f"Results for full run (./results/{config['run_id']}) already exist, program exiting...")
+        exit(0)
     shutil.copytree(f"./results/{best_trial_name}", f"./results/{config['run_id']}")
 
 def main():
