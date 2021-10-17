@@ -1,4 +1,5 @@
 import argparse
+from logging import warning
 import yaml
 from copy import deepcopy
 import os
@@ -212,6 +213,9 @@ class OptunaHyperparamTuner:
             if trial.state.is_finished():
                 new_study.add_trial(trial)
         # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
+        if self.config['realm_ai']['total_trials'] >= len(new_study.trials):
+            warning(f'{len(new_study.trials)} completed trials already found in folder "{folder_name}". Exiting...')
+            exit(0)
         print(f'Resuming from {len(new_study.trials)} completed trials')
         return new_study
 
@@ -267,8 +271,7 @@ def configure_for_full_run(config, best_trial_name):
     with open("./best_trial/full_run_config.yml", 'w') as f:
         yaml.dump(hyperparam, f, default_flow_style=False) 
     if os.path.isdir(f"./results/{config['run_id']}"):
-        print(f"Results for full run (./results/{config['run_id']}) already exist, program exiting...")
-        exit(0)
+        raise FileExistsError(f"Results for full run (./results/{config['run_id']}) already exist, program exiting...")
     shutil.copytree(f"./results/{best_trial_name}", f"./results/{config['run_id']}")
 
 def main():
