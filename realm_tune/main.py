@@ -13,7 +13,6 @@ import requests
 from tensorboard import program
 import optuna
 from optuna.samplers import TPESampler, RandomSampler, GridSampler
-import wandb
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
@@ -50,8 +49,6 @@ class OptunaHyperparamTuner:
             
             assert isinstance(config['realm_ai']['eval_window_size'], int)
 
-            self.use_wandb = 'wandb_project' in config['realm_ai']
-
         try:
             with open(path) as f:
                 config = yaml.load(f, Loader=yaml.FullLoader)
@@ -68,7 +65,6 @@ class OptunaHyperparamTuner:
         print(f'Running trial {trial.number}')
         
         curr_config = deepcopy(self.config['mlagents'])
-        log_config = {} # Dictionary for logging purposes
         for hyperparam, hpTuningType, values in self.hyperparameters_to_tune:
             if hpTuningType==HpTuningType.CATEGORICAL:
                 val = trial.suggest_categorical(hyperparam, values)
@@ -89,12 +85,8 @@ class OptunaHyperparamTuner:
                 tmp_pointer = tmp_pointer[i]
             tmp_pointer[hyperparam] = val
             
-            log_config[hyperparam] = val
         
         run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
-
-        if self.use_wandb:
-            self.wandb_run = self.__init_wandb_run(run_id, log_config)
 
         self.__create_config_file(run_id, curr_config)
 
@@ -105,10 +97,6 @@ class OptunaHyperparamTuner:
 
         score = self.__evaluate(run_id)
         print(f'Score for trial {trial.number}: {score}')
-
-        if self.use_wandb:
-            wandb.log({"avg_reward":score})
-            self.wandb_run.finish()
 
         return score
 
@@ -161,13 +149,6 @@ class OptunaHyperparamTuner:
                     parse_recursively(dict_[k], path+[k])
 
         parse_recursively(hyperparameters, list())
-
-    def __init_wandb_run(self, run_id, config):
-
-        wandb.tensorboard.patch(root_logdir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", pytorch=True)
-        run = wandb.init(config=config, name=run_id, group=self.config['realm_ai']['folder_name'], job_type='hyperparameter_optimization', reinit=True)
-        # wandb.s
-        return run
 
     def __create_config_file(self, run_id, config):
         '''
