@@ -13,6 +13,7 @@ import requests
 from tensorboard import program
 import optuna
 from optuna.samplers import TPESampler, RandomSampler, GridSampler
+import wandb
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
@@ -36,10 +37,21 @@ class OptunaHyperparamTuner:
     def load_config(self, path: str):
         def assert_config_structure():
             assert('realm_ai' in config and 'mlagents' in config)
+            
             self.algo = config['realm_ai'].get('algorithm', 'bayes')
             assert self.algo in ['bayes', 'grid', 'random']
+            if self.algo=='bayes':
+                config['realm_ai']['warmup_trials'] = config['realm_ai'].get('warmup_trials', 5)
+            
             if 'checkpoint_settings' not in config['mlagents']:
                 config['mlagents']['checkpoint_settings'] = {}
+            
+            config['realm_ai']['eval_window_size'] = config['realm_ai'].get('eval_window_size', 1)
+            
+            assert isinstance(config['realm_ai']['eval_window_size'], int)
+
+            self.use_wandb = 'wandb_project' in config['realm_ai']
+
         try:
             with open(path) as f:
                 config = yaml.load(f, Loader=yaml.FullLoader)
@@ -56,6 +68,7 @@ class OptunaHyperparamTuner:
         print(f'Running trial {trial.number}')
         
         curr_config = deepcopy(self.config['mlagents'])
+        log_config = {} # Dictionary for logging purposes
         for hyperparam, hpTuningType, values in self.hyperparameters_to_tune:
             if hpTuningType==HpTuningType.CATEGORICAL:
                 val = trial.suggest_categorical(hyperparam, values)
@@ -75,8 +88,13 @@ class OptunaHyperparamTuner:
             for i in self.hyperparams_path[hyperparam][:-1]:
                 tmp_pointer = tmp_pointer[i]
             tmp_pointer[hyperparam] = val
+            
+            log_config[hyperparam] = val
         
         run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
+
+        if self.use_wandb:
+            self.__init_wandb_run(run_id, log_config)
 
         self.__create_config_file(run_id, curr_config)
 
@@ -139,6 +157,10 @@ class OptunaHyperparamTuner:
 
         parse_recursively(hyperparameters, list())
 
+    def __init_wandb_run(self, run_id, config):
+        wandb.tensorboard.patch(root_logdir=f"results/{run_id}/{self.config['realm_ai']['behavior_name']}", pytorch=True)
+        run = wandb.init(config=config, name=run_id, group=self.config['realm_ai']['behavior_name'])
+
     def __create_config_file(self, run_id, config):
         '''
         Create a config file for the given configuration
@@ -160,7 +182,7 @@ class OptunaHyperparamTuner:
             r.raise_for_status()
         response = r.json()
         _,_,cumulative_reward = zip(*response)
-        return statistics.mean(cumulative_reward[-int(self.config['realm_ai'].get('eval_window_size', 1)):])
+        return statistics.mean(cumulative_reward[-self.config['realm_ai']['eval_window_size']:])
 
     def __get_sampler(self)-> optuna.samplers.BaseSampler:
         if self.algo == 'bayes':
@@ -171,13 +193,13 @@ class OptunaHyperparamTuner:
             search_space = {i:v for i, _, v in self.hyperparameters_to_tune}
             return GridSampler(search_space)
 
-    def run_from_scratch(self, run_id=None) -> optuna.Study:
-        self.folder = run_id
+    def run_from_scratch(self, folder_name=None) -> optuna.Study:
+        self.folder = folder_name
         if self.folder is None:
             self.folder = f'{self.config["realm_ai"]["behavior_name"]}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
         
         if os.path.isdir(self.folder):
-            raise FileExistsError(f'"{self.folder}/" already exists, and no checkpoint exists in that folder. Please rename run_id in config file, or delete the folder!')
+            raise FileExistsError(f'"{self.folder}/" already exists, and no checkpoint exists in that folder. Please rename folder_name in config file, or delete the folder!')
         else:
             print('Creating folder named', self.folder)
             os.mkdir(self.folder)
@@ -188,8 +210,8 @@ class OptunaHyperparamTuner:
         study = optuna.create_study(study_name=self.folder, sampler=sampler, direction="maximize")
         return study
 
-    def restore_from_checkpoint(self, run_id) -> optuna.Study:
-        self.folder = run_id
+    def restore_from_checkpoint(self, folder_name) -> optuna.Study:
+        self.folder = folder_name
         assert(os.path.isdir(self.folder))
 
         os.chdir(self.folder)
@@ -212,10 +234,10 @@ class OptunaHyperparamTuner:
         if not os.path.isdir('runs'):
             os.mkdir('runs')
         os.chdir('./runs')
-        if 'run_id' in self.config['realm_ai'] and os.path.isdir(self.config['realm_ai']['run_id']) and os.path.isfile(f"{self.config['realm_ai']['run_id']}/optuna_study.pkl"):
-            study = self.restore_from_checkpoint(self.config['realm_ai']['run_id'])
+        if 'folder_name' in self.config['realm_ai'] and os.path.isdir(self.config['realm_ai']['folder_name']) and os.path.isfile(f"{self.config['realm_ai']['folder_name']}/optuna_study.pkl"):
+            study = self.restore_from_checkpoint(self.config['realm_ai']['folder_name'])
         else:
-            study = self.run_from_scratch(run_id=self.config['realm_ai']['run_id'] if 'run_id' in self.config['realm_ai'] else None)
+            study = self.run_from_scratch(folder_name=self.config['realm_ai']['folder_name'] if 'folder_name' in self.config['realm_ai'] else None)
         
         interrupted = False
         try:
