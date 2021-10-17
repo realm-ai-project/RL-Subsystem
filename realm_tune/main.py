@@ -16,7 +16,7 @@ from optuna.samplers import TPESampler, RandomSampler, GridSampler
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
-    parser.add_argument('--config_path', default='BayesianOpt/bayes.yaml')
+    parser.add_argument('--config_path', default='realm_tune/bayes.yaml')
     args = parser.parse_args()
     return args
 
@@ -259,12 +259,15 @@ def configure_for_full_run(config, best_trial_name):
         raise FileExistsError(f"Results for full run (./results/{config['run_id']}) already exist!")
     shutil.copytree(f"./results/{best_trial_name}", f"./results/{config['run_id']}")
 
-if __name__ == "__main__":
+def main():
     args = parse_arguments()
     alg = OptunaHyperparamTuner(args.config_path)
     best_trial_name = alg.run()
     config = alg.config
     if 'full_run_after_tuning' in config['realm_ai']:
         configure_for_full_run(config['realm_ai']['full_run_after_tuning'], best_trial_name)
+
+if __name__ == "__main__":
+    main()
 
     
