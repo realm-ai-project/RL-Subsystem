@@ -51,7 +51,10 @@ class OptunaHyperparamTuner:
             
             assert isinstance(config['realm_ai']['eval_window_size'], int)
 
-            self.use_wandb = 'wandb_project' in config['realm_ai']
+            self.use_wandb = 'wandb' in config['realm_ai'] and 'project' in config['realm_ai']['wandb'] and 'entity' in config['realm_ai']['wandb']
+            if 'wandb' in config['realm_ai'] and 'offline' in config['realm_ai']['wandb'] and config['realm_ai']['wandb']['offline']:
+                os.environ["WANDB_MODE"]="offline"
+                raise NotImplementedError("Offline mode not supported for now!")
 
         try:
             with open(path) as f:
@@ -67,9 +70,13 @@ class OptunaHyperparamTuner:
         Optuna's objective function
         '''
         print(f'Running trial {trial.number}')
+
+        run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
+        if self.use_wandb:
+            wandb_run = wandb.init(entity=self.config['realm_ai']['wandb']['entity'], group=self.config['realm_ai']['folder_name'], project=self.config['realm_ai']['wandb']['project'], reinit=True)
+            wandb_run.name = f"{run_id}_{wandb_run.id}"
         
         curr_config = deepcopy(self.config['mlagents'])
-        log_config = {} # Dictionary for logging purposes
         for hyperparam, hpTuningType, values in self.hyperparameters_to_tune:
             if hpTuningType==HpTuningType.CATEGORICAL:
                 val = trial.suggest_categorical(hyperparam, values)
@@ -90,12 +97,9 @@ class OptunaHyperparamTuner:
                 tmp_pointer = tmp_pointer[i]
             tmp_pointer[hyperparam] = val
             
-            log_config[hyperparam] = val
+            if self.use_wandb:
+                wandb_run.config[hyperparam] = val
         
-        run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
-
-        if self.use_wandb:
-            self.wandb_run = self.__init_wandb_run(run_id, log_config)
 
         self.__create_config_file(run_id, curr_config)
 
@@ -108,8 +112,9 @@ class OptunaHyperparamTuner:
         print(f'Score for trial {trial.number}: {score}')
 
         if self.use_wandb:
-            wandb.log({"avg_reward":score})
-            self.wandb_run.finish()
+            wandb.summary["Average Reward"] = score
+            wandb.Api(overrides={'entity':self.config['realm_ai']['wandb']['entity']}).sync_tensorboard(root_dir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", run_id=wandb_run.id, project=self.config['realm_ai']['wandb']['project'])
+            wandb_run.finish()
 
         return score
 
@@ -163,13 +168,6 @@ class OptunaHyperparamTuner:
 
         parse_recursively(hyperparameters, list())
 
-    def __init_wandb_run(self, run_id, config):
-
-        wandb.tensorboard.patch(root_logdir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", pytorch=True)
-        run = wandb.init(config=config, name=run_id, group=self.config['realm_ai']['folder_name'], job_type='hyperparameter_optimization', reinit=True)
-        # wandb.s
-        return run
-
     def __create_config_file(self, run_id, config):
         '''
         Create a config file for the given configuration
@@ -207,6 +205,14 @@ class OptunaHyperparamTuner:
         if self.folder is None:
             self.folder = f'{self.config["realm_ai"]["behavior_name"]}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
         
+        if self.use_wandb: # Delete existing runs under the same folder (group) on wandb if it already exists
+            path = f"{self.config['realm_ai']['wandb']['entity']}/{self.config['realm_ai']['wandb']['project']}"
+            runs_to_delete = wandb.Api().runs(path=path, filters={"group":self.folder}, per_page=1000)
+            
+            for run in runs_to_delete:
+                run.delete()
+
+
         if os.path.isdir(self.folder):
             raise FileExistsError(f'"{self.folder}/" already exists, and no checkpoint exists in that folder. Please rename folder_name in config file, or delete the folder!')
         else:

@@ -8,7 +8,10 @@ realm_ai:
   full_run_after_tuning: # optional, if specified, config in "best_trial" folder will be changed to reflect the following. If this is specified, run_id should be specified so that we know the name of the folder!
     max_steps: 20000 # number of steps to run for the full training
     run_id: full_run # name of the complete training run
-  wandb_project: realm_tune # optional, if specified, log training metrics to wandb
+  # wandb: # optional, if specified, log training metrics to wandb. Must be online to use!
+  #   project: realm_tune 
+  #   entity: <username>
+  #   offline: false # not supported for now!
 
 mlagents: # all values here (even those that are commented out) are used by the script. Other possible configs that are not here can be added at the discretion of the user.
   env_settings:
