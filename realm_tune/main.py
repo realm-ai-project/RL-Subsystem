@@ -238,7 +238,7 @@ class OptunaHyperparamTuner:
             if trial.state.is_finished():
                 new_study.add_trial(trial)
         # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
-        if self.config['realm_ai']['total_trials'] >= len(new_study.trials):
+        if self.config['realm_ai']['total_trials'] <= len(new_study.trials):
             warning(f'{len(new_study.trials)} completed trials already found in folder "{folder_name}". Exiting...')
             exit(0)
         print(f'Resuming from {len(new_study.trials)} completed trials')
