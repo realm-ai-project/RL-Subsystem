@@ -8,6 +8,7 @@ setup(
         "requests",  
         "mlagents",
         "optuna",
+        "wandb",
     ],
     python_requires=">=3.6.1",
     packages=find_packages(include=['realm_train', 'realm_tune']),
