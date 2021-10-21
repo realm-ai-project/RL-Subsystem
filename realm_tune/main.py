@@ -18,7 +18,9 @@ import wandb
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
-    parser.add_argument('--config_path', default='realm_tune/bayes.yaml')
+    parser.add_argument('--config-path', default='realm_tune/default.yaml')
+    parser.add_argument('--env-path', type=str, default=None, help="Path to environment. If specified, overrides env_path in the config file")
+    parser.add_argument('--behavior-name', type=str, default=None, help='Name of behaviour. This can be found under the agent\'s "Behavior Parameters" component in the inspector of Unity')
     args = parser.parse_args()
     return args
 
@@ -30,8 +32,9 @@ class HpTuningType(Enum):
     LOG_UNIFORM_INT = auto()
 
 class OptunaHyperparamTuner:
-    def __init__(self, config_file_path):
-        self.load_config(config_file_path)
+    def __init__(self, args):
+        self.load_config(args.config_path)
+        self.override_config_with_args(args)
         self.find_hyperparameters_to_tune()
         self.tensorboard_url = None
     
@@ -64,6 +67,17 @@ class OptunaHyperparamTuner:
         
         assert_config_structure()
         self.config = config
+    
+    def override_config_with_args(self, args):
+        if args.env_path:
+            if 'env_settings' not in self.config['mlagents']:
+                self.config['mlagents']['env_settings'] = {}
+            self.config['mlagents']['env_settings']['env_path'] = args.env_path
+        
+        if not args.behavior_name:
+            assert 'behavior_name' in self.config['realm_ai'], 'Behavior name of agent is required! This can be found under the agent\'s "Behavior Parameters" component in the inspector of Unity'
+        else:
+            self.config['realm_ai']['behavior_name'] = args.behavior_name
 
     def __call__(self, trial: optuna.trial.Trial) -> float:
         '''
@@ -301,7 +315,7 @@ def configure_for_full_run(config, best_trial_name):
 
 def main():
     args = parse_arguments()
-    alg = OptunaHyperparamTuner(args.config_path)
+    alg = OptunaHyperparamTuner(args)
     best_trial_name = alg.run()
     config = alg.config
     if 'full_run_after_tuning' in config['realm_ai']:
