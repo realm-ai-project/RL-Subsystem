@@ -73,7 +73,9 @@ class OptunaHyperparamTuner:
             if 'env_settings' not in self.config['mlagents']:
                 self.config['mlagents']['env_settings'] = {}
             self.config['mlagents']['env_settings']['env_path'] = args.env_path
-        
+        elif 'env_settings' not in self.config['mlagents']:
+            warning("Not recommended to run in editor mode...")
+
         if not args.behavior_name:
             assert 'behavior_name' in self.config['realm_ai'], 'Behavior name of agent is required! This can be found under the agent\'s "Behavior Parameters" component in the inspector of Unity'
         else:
