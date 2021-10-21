@@ -18,7 +18,7 @@ import wandb
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
-    parser.add_argument('--config-path', default='realm_tune/default.yaml')
+    parser.add_argument('--config-path', default=f'{os.path.dirname(os.path.realpath(__file__))}/default.yaml')
     parser.add_argument('--env-path', type=str, default=None, help="Path to environment. If specified, overrides env_path in the config file")
     parser.add_argument('--behavior-name', type=str, default=None, help='Name of behaviour. This can be found under the agent\'s "Behavior Parameters" component in the inspector of Unity')
     args = parser.parse_args()
