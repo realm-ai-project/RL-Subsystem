@@ -8,10 +8,13 @@ import time
 import statistics
 from enum import Enum, auto
 import pickle
-import shutil 
+import shutil
+import glob
 
-import requests
-from tensorboard import program
+# import requests
+# from tensorboard import program
+import tensorflow as tf
+from tensorflow.core.util import event_pb2
 import optuna
 from optuna.samplers import TPESampler, RandomSampler, GridSampler
 import wandb
@@ -120,10 +123,10 @@ class OptunaHyperparamTuner:
         self.__create_config_file(run_id, curr_config)
 
         subprocess.run(["mlagents-learn", f"{run_id}.yml", "--force"])
+        # run_cli(parse_command_line(argv=[f"{run_id}.yml", "--force"]))
 
-        if self.tensorboard_url is None:
-            self.__launch_tensorboard()
-
+        # if self.tensorboard_url is None:
+        #     self.__launch_tensorboard()
         score = self.__evaluate(run_id)
         print(f'Score for trial {trial.number}: {score}')
 
@@ -192,20 +195,29 @@ class OptunaHyperparamTuner:
         with open(f'{run_id}.yml', 'w') as f:
             yaml.dump(config, f, default_flow_style=False) 
 
-    def __launch_tensorboard(self):
-        tb = program.TensorBoard()
-        tb.configure(argv=[None, "--logdir", "results"])
-        self.tensorboard_url = tb.launch()
+    # def __launch_tensorboard(self):
+    #     tb = program.TensorBoard()
+    #     tb.configure(argv=[None, "--logdir", "results"])
+    #     self.tensorboard_url = tb.launch()
+
+    # def __evaluate(self, run_id) -> int: 
+    #     tb_query_url = f'{self.tensorboard_url}data/plugin/scalars/scalars'
+    #     r = requests.get(tb_query_url, params={"run":f"{run_id}/{self.config['realm_ai']['behavior_name']}", "tag":"Environment/Cumulative Reward"})
+    #     if r.status_code != requests.codes.ok:
+    #         print(f"Error querying tensorboard on port 6006 for run_id:{run_id}")
+    #         r.raise_for_status()
+    #     response = r.json()
+    #     _,_,cumulative_reward = zip(*response)
+    #     return statistics.mean(cumulative_reward[-self.config['realm_ai']['eval_window_size']:])
 
     def __evaluate(self, run_id) -> int: 
-        tb_query_url = f'{self.tensorboard_url}data/plugin/scalars/scalars'
-        r = requests.get(tb_query_url, params={"run":f"{run_id}/{self.config['realm_ai']['behavior_name']}", "tag":"Environment/Cumulative Reward"})
-        if r.status_code != requests.codes.ok:
-            print(f"Error querying tensorboard on port 6006 for run_id:{run_id}")
-            r.raise_for_status()
-        response = r.json()
-        _,_,cumulative_reward = zip(*response)
-        return statistics.mean(cumulative_reward[-self.config['realm_ai']['eval_window_size']:])
+        logdir = f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}/events*"
+        eventfile = glob.glob(logdir)[0]
+        rew = [value.simple_value 
+        for serialized_example in tf.data.TFRecordDataset(eventfile) 
+            for value in event_pb2.Event.FromString(serialized_example.numpy()).summary.value 
+                if value.tag == 'Environment/Cumulative Reward']
+        return statistics.mean(rew[-self.config['realm_ai']['eval_window_size']:])
 
     def __get_sampler(self)-> optuna.samplers.BaseSampler:
         if self.algo == 'bayes':
