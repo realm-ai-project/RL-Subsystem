@@ -138,4 +138,6 @@ dmypy.json
 cython_debug/
 
 # Ignore runs folder
-runs/
+**/runs/
+**/wandb/
+**/results/
