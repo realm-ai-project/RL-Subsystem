@@ -24,15 +24,15 @@ class WandBSettings:
         dict_ = {'wandb':True}
         if obj is not None: # Possible that their yaml file only has a "wandb:" field
             for k, v in obj.items():
-                if k=='project':
+                if k=='project' or k=='wandb_project':
                     dict_['wandb_project'] = v
-                elif k=='entity':
+                elif k=='entity' or k=='wandb_entity':
                     dict_['wandb_entity'] = v
-                elif k=='group':
+                elif k=='group' or k=='wandb_group':
                     dict_['wandb_group'] = v
-                elif k=='offline':
+                elif k=='offline' or k=='wandb_offline':
                     dict_['wandb_offline'] = v
-                elif k=='jobtype':
+                elif k=='jobtype'or k=="wandb_jobtype":
                     dict_['wandb_jobtype'] = v
                 else:
                     warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
@@ -64,9 +64,24 @@ class RealmTuneBaseConfig:
     #         return 
 
 @attr.s(auto_attribs=True)
+class MLAgentsBaseConfig: 
+    '''
+    Leave these as dictionaries, validation of the fields will be performed when mlagents is called.
+    '''
+    # Don't strictly need this, just here for backup
+    default_settings: Dict = attr.ib(factory=lambda :{'default_settings': {'trainer_type': 'ppo', 'hyperparameters': {'batch_size': 'log_unif(64, 16384)', 'buffer_size': 'log_unif(2000, 50000)', 'learning_rate': 'log_unif(0.0003, 0.01)', 'beta': 'log_unif(0.001, 0.03)', 'epsilon': 0.2, 'lambd': 'unif(0.95, 1.0)', 'num_epoch': 3, 'learning_rate_schedule': 'linear'}, 'network_settings': {'normalize': True, 'hidden_units': [64, 256, 512, 1024], 'num_layers': 'unif(1, 3)', 'vis_encode_type': 'simple'}, 'reward_signals': {'extrinsic': {'gamma': 'unif(0.9, 1.0)', 'strength': 1.0}}, 'keep_checkpoints': 5, 'max_steps': 100000, 'time_horizon': 1000, 'summary_freq': 10000}})
+    env_settings: Dict = attr.ib(factory=dict)
+    engine_settings: Dict = attr.ib(factory=dict)
+    environment_parameters: Dict = attr.ib(factory=dict)
+    checkpoint_settings: Dict = attr.ib(factory=dict)
+    torch_settings: Dict = attr.ib(factory=dict)
+    debug: bool = False
+
+
+@attr.s(auto_attribs=True)
 class RealmTuneConfig:
     realm_ai: RealmTuneBaseConfig = attr.ib(factory=RealmTuneBaseConfig)
-    mlagents: Dict = attr.Factory(dict)
+    mlagents: MLAgentsBaseConfig = attr.ib(factory=MLAgentsBaseConfig)
 
     @staticmethod
     def from_yaml_file(path_to_yaml_file): 
@@ -96,14 +111,14 @@ class RealmTuneConfig:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         return cattr.structure(dict_, RealmTuneConfig)
 
-# TODO: Look into "if key in DetectDefault.non_default_args:" line 878, settings.py
-# The idea is that we don't want to blindly update everything based on our argparse, we want to only update our settings based on argparse if it has been changed from its default value!
 
-# Solution: First, update all values using those from the config file. Then, Add a custom structure hook for each type. In the hook, iterate through argparse, and check if argument has been changed from default value. If yes, change value in dictionary. Else, don't add key to dictionary. Then just do cattr.structure(...) 
-
+# For debugging purposes
 if __name__=='__main__':
     # args = parser.parse_args(["--config-path","realm_tune/bayes.yaml"])
-    # item = RealmTuneConfig.from_yaml_file(args.config_path)
-    # print(item)
+    args = parser.parse_args(["--config-path","test.yml"])
+    item = RealmTuneConfig.from_yaml_file(args.config_path)
+    print(item)
 
-    print(RealmTuneConfig.from_argparse(parser))
+    config = cattr.unstructure(RealmTuneConfig.from_argparse(parser))
+    with open(f'test.yaml', 'w') as f:
+            yaml.dump(config, f, default_flow_style=False)
