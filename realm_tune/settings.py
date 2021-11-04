@@ -1,6 +1,8 @@
 import argparse
 from typing import Dict, Optional, Set, Union
+from enum import Enum, auto
 import warnings
+import os
 
 import attr
 import cattr
@@ -18,6 +20,10 @@ class WandBSettings:
     wandb_offline: bool = False
     wandb_group: Union[str, None] = parser.get_default('wandb_group')
     wandb_jobtype: Union[str, None] = parser.get_default('wandb_jobtype')
+
+    # def __attrs_post_init__(self): # No need, done in wandb wrapper
+    #     if self.wandb_offline:
+    #         os.environ["WANDB_MODE"]="offline"
     
     @staticmethod
     def structure_from_yaml(obj: Dict, _): # Will only enter this function if wandb field exists in yaml file
@@ -41,14 +47,18 @@ class WandBSettings:
 
 @attr.s(auto_attribs=True)
 class RealmTuneBaseConfig:
-    behavior_name: str = parser.get_default('behavior_name')
-    algorithm: str = parser.get_default('algorithm')
+    behavior_name: Optional[str] = parser.get_default('behavior_name')
+    algorithm: str = attr.ib(default=parser.get_default('algorithm'))
+    @algorithm.validator
+    def _check_algorithm(self, attribute, value):
+        assert value in ['bayes', 'grid', 'random']
     total_trials: int = parser.get_default('total_trials')
     warmup_trials: int = parser.get_default('warmup_trials')
     eval_window_size: int = parser.get_default('eval_window_size')
     data_path: Union[str, None] = parser.get_default('data_path')
     env_path: Union[str, None] = parser.get_default('env_path')
     wandb: WandBSettings = attr.ib(factory=WandBSettings)
+
 
     @staticmethod
     def structure():
@@ -63,6 +73,13 @@ class RealmTuneBaseConfig:
     #     if parser.get_default('data_path') is None:
     #         return 
 
+class HpTuningType(Enum):
+    CATEGORICAL = auto()
+    UNIFORM_INT = auto()
+    UNIFORM_FLOAT = auto()
+    LOG_UNIFORM_FLOAT = auto()
+    LOG_UNIFORM_INT = auto()
+
 @attr.s(auto_attribs=True)
 class MLAgentsBaseConfig: 
     '''
@@ -75,7 +92,57 @@ class MLAgentsBaseConfig:
     environment_parameters: Dict = attr.ib(factory=dict)
     checkpoint_settings: Dict = attr.ib(factory=dict)
     torch_settings: Dict = attr.ib(factory=dict)
-    debug: bool = False
+    debug: bool = False        
+
+    def find_hyperparameters_to_tune(self, algo):
+        '''
+        Find all hyperparameters to perform hyperparameter tuning on, 
+        and store them in self.hyperparams_path and self.hyperparameters_to_tune
+        '''
+        hyperparameters = self.default_settings
+        # tells us path to hyperparameter in config file given hyperparameter name
+        self.hyperparams_path = {}
+        # a tuple of three values (hyperparameter, HpTuningType, tuple of values)
+        self.hyperparameters_to_tune = []
+
+        def parse_recursively(dict_, path: list):
+            if not dict_:
+                return 
+            for k, v in dict_.items():
+                # if its a list, its a categorical hyperparameter to tune
+                if isinstance(v, list):
+                    self.hyperparameters_to_tune.append((k, HpTuningType.CATEGORICAL, tuple(v)))
+                    if k in self.hyperparams_path:
+                        raise Exception(f'Duplicated hyperparameters found!, hyperparameter: {k}')
+                    self.hyperparams_path[k] = path+[k]
+                # if it contains the substring "unif(" and ")" or "log_unif(" and ")", its a continuous hyperparameter to tune
+                elif isinstance(v, str) and '(' in v and ')' in v:
+                    assert algo!='grid', f'Continuous hyperparameters "{k}" not allowed in grid search!'
+                    assert v[-1]==')', 'Continuous hyperparameter must end in ")"'
+                    index = v.find('(')
+                    list_ = v[index+1:-1].split(',')
+                    assert(len(list_)==2), f'Parsing "{v}" for hyperparameter "{k}" failed; Continuous hyperparameter(s) must only contain 2 numerical values!'
+                    low, high = float(list_[0]), float(list_[1])
+                    assert(low<high), f'Parsing "{v}" for hyperparameter "{k}" failed; First value must be smaller than the second!'
+                    
+                    if v[:index]=='unif':
+                        if low.is_integer() and high.is_integer():
+                            self.hyperparameters_to_tune.append((k, HpTuningType.UNIFORM_INT, (int(low), int(high))))
+                        else:
+                            self.hyperparameters_to_tune.append((k, HpTuningType.UNIFORM_FLOAT, (low, high)))
+                    elif v[:index]=='log_unif':
+                        if low.is_integer() and high.is_integer():
+                            self.hyperparameters_to_tune.append((k, HpTuningType.LOG_UNIFORM_INT, (int(low), int(high))))
+                        else:
+                            self.hyperparameters_to_tune.append((k, HpTuningType.LOG_UNIFORM_FLOAT, (low, high)))
+                    else:
+                        raise NotImplementedError(f'"{v[:index]}" method not implemented!')
+                    self.hyperparams_path[k] = path+[k]
+                # recursively parse nested dictionary
+                elif isinstance(v, dict):
+                    parse_recursively(dict_[k], path+[k])
+
+        parse_recursively(hyperparameters, list())
 
 
 @attr.s(auto_attribs=True)
@@ -83,8 +150,23 @@ class RealmTuneConfig:
     realm_ai: RealmTuneBaseConfig = attr.ib(factory=RealmTuneBaseConfig)
     mlagents: MLAgentsBaseConfig = attr.ib(factory=MLAgentsBaseConfig)
 
+    def validate(self):
+        # Ensure that env_path is set somewhere
+        if self.realm_ai.env_path is None and 'env_path' not in self.mlagents.env_settings:
+            raise ValueError('Realm-tune does not support in-editor training! Please pass in a --config-path flag, or add env_path to yaml file under the mlagents config')
+        if 'env_path' not in self.mlagents.env_settings:
+            self.mlagents.env_settings['env_path'] = self.realm_ai.env_path
+        
+        # Find hyperparameters to tune
+        self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
+
+        # TODO: Find behavior name if it is not passed in
+        # For now, assert that behavior name is passed in
+        assert self.realm_ai.behavior_name is not None, "We need a behavior name!"
+
+
     @staticmethod
-    def from_yaml_file(path_to_yaml_file): 
+    def _from_yaml_file(path_to_yaml_file): 
         converter = Converter()
         converter.register_structure_hook(WandBSettings, WandBSettings.structure_from_yaml)
         with open(path_to_yaml_file) as f:
@@ -97,9 +179,8 @@ class RealmTuneConfig:
         return converter.structure(config, RealmTuneConfig)
 
     @staticmethod
-    def from_argparse(parser: argparse.ArgumentParser):
-        args = parser.parse_args()
-        realm_tune_config = RealmTuneConfig.from_yaml_file(args.config_path)
+    def from_argparse(args: argparse.Namespace):
+        realm_tune_config = RealmTuneConfig._from_yaml_file(args.config_path)
         dict_ = cattr.unstructure(realm_tune_config)
         for k, v in vars(args).items():
             if k in DetectDefault.non_default_args:
@@ -109,16 +190,19 @@ class RealmTuneConfig:
                     dict_['realm_ai']['wandb'][k] = v
                 else:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
-        return cattr.structure(dict_, RealmTuneConfig)
+        realm_tune_config = cattr.structure(dict_, RealmTuneConfig)
+        realm_tune_config.validate()
+        return realm_tune_config
 
 
 # For debugging purposes
 if __name__=='__main__':
     # args = parser.parse_args(["--config-path","realm_tune/bayes.yaml"])
-    args = parser.parse_args(["--config-path","test.yml"])
-    item = RealmTuneConfig.from_yaml_file(args.config_path)
-    print(item)
+    # args = parser.parse_args(["--config-path","test.yml"])
+    # item = RealmTuneConfig.from_yaml_file(args.config_path)
+    # print(item)
 
-    config = cattr.unstructure(RealmTuneConfig.from_argparse(parser))
-    with open(f'test.yaml', 'w') as f:
-            yaml.dump(config, f, default_flow_style=False)
+    config = cattr.unstructure(RealmTuneConfig.from_argparse(parser.parse_args()))
+    print(config)
+    # with open(f'test.yaml', 'w') as f:
+            # yaml.dump(config, f, default_flow_style=False)
