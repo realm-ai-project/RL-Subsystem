@@ -55,7 +55,7 @@ class RealmTuneBaseConfig:
     total_trials: int = parser.get_default('total_trials')
     warmup_trials: int = parser.get_default('warmup_trials')
     eval_window_size: int = parser.get_default('eval_window_size')
-    data_path: Union[str, None] = parser.get_default('data_path')
+    output_path: Union[str, None] = parser.get_default('output_path')
     env_path: Union[str, None] = parser.get_default('env_path')
     wandb: WandBSettings = attr.ib(factory=WandBSettings)
 
@@ -150,7 +150,7 @@ class RealmTuneConfig:
     realm_ai: RealmTuneBaseConfig = attr.ib(factory=RealmTuneBaseConfig)
     mlagents: MLAgentsBaseConfig = attr.ib(factory=MLAgentsBaseConfig)
 
-    def validate(self):
+    def _init_and_validate(self):
         # Ensure that env_path is set somewhere
         if self.realm_ai.env_path is None and 'env_path' not in self.mlagents.env_settings:
             raise ValueError('Realm-tune does not support in-editor training! Please pass in a --config-path flag, or add env_path to yaml file under the mlagents config')
@@ -160,7 +160,7 @@ class RealmTuneConfig:
         # Find hyperparameters to tune
         self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
 
-        # TODO: Find behavior name if it is not passed in
+        # TODO: Find behavior name from Unity env if it is not passed in
         # For now, assert that behavior name is passed in
         assert self.realm_ai.behavior_name is not None, "We need a behavior name!"
 
@@ -191,18 +191,17 @@ class RealmTuneConfig:
                 else:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         realm_tune_config = cattr.structure(dict_, RealmTuneConfig)
-        realm_tune_config.validate()
+        realm_tune_config.init_and_validate()
         return realm_tune_config
 
 
 # For debugging purposes
 if __name__=='__main__':
     # args = parser.parse_args(["--config-path","realm_tune/bayes.yaml"])
-    # args = parser.parse_args(["--config-path","test.yml"])
     # item = RealmTuneConfig.from_yaml_file(args.config_path)
     # print(item)
 
-    config = cattr.unstructure(RealmTuneConfig.from_argparse(parser.parse_args()))
+    config = cattr.unstructure(RealmTuneConfig.from_argparse(parser.parse_args(["--config-path","realm_tune/bayes.yaml"])))
     print(config)
     # with open(f'test.yaml', 'w') as f:
             # yaml.dump(config, f, default_flow_style=False)
