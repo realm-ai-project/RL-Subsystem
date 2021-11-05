@@ -14,7 +14,7 @@ from realm_tune.cli_config import DetectDefault, parser
 
 @attr.s(auto_attribs=True)
 class WandBSettings:
-    wandb: bool = False        
+    use_wandb: bool = False        
     wandb_project: Union[str, None] = parser.get_default('wandb_project')
     wandb_entity: Union[str, None] = parser.get_default('wandb_entity')
     wandb_offline: bool = False
@@ -26,8 +26,9 @@ class WandBSettings:
     #         os.environ["WANDB_MODE"]="offline"
     
     @staticmethod
-    def structure_from_yaml(obj: Dict, _): # Will only enter this function if wandb field exists in yaml file
-        dict_ = {'wandb':True}
+    def structure(obj: Dict, _): 
+        # We can do this since we'll only enter this function if wandb field exists in yaml or specified in cli
+        dict_ = {'use_wandb':True}
         if obj is not None: # Possible that their yaml file only has a "wandb:" field
             for k, v in obj.items():
                 if k=='project' or k=='wandb_project':
@@ -47,31 +48,33 @@ class WandBSettings:
 
 @attr.s(auto_attribs=True)
 class RealmTuneBaseConfig:
-    behavior_name: Optional[str] = parser.get_default('behavior_name')
+    behavior_name: Optional[str] =  attr.ib(default=parser.get_default('behavior_name'))
     algorithm: str = attr.ib(default=parser.get_default('algorithm'))
-    @algorithm.validator
-    def _check_algorithm(self, attribute, value):
-        assert value in ['bayes', 'grid', 'random']
     total_trials: int = parser.get_default('total_trials')
     warmup_trials: int = parser.get_default('warmup_trials')
     eval_window_size: int = parser.get_default('eval_window_size')
-    output_path: Union[str, None] = parser.get_default('output_path')
-    env_path: Union[str, None] = parser.get_default('env_path')
+    output_path: Optional[str] = attr.ib(default=parser.get_default('output_path'))
+    env_path: Optional[str] = parser.get_default('env_path')
     wandb: WandBSettings = attr.ib(factory=WandBSettings)
 
+    @behavior_name.validator
+    def _check_behavior_name(self, attri, val):
+        # TODO: Find behavior name from Unity env if it is not passed in
+        # For now, assert that behavior name is passed in
+        assert val is not None, "We need a behavior name!"
+
+    @algorithm.validator
+    def _check_algorithm(self, attribute, value):
+        assert value in ['bayes', 'grid', 'random']
 
     @staticmethod
     def structure():
         pass
-    # @behavior_name.default
-    # def _set_default_behavior_name(self):
-    #     if parser.get_default('behavior_name') is None:
-    #         return 
 
-    # @data_path.default
-    # def _set_default_data_path(self):
-    #     if parser.get_default('data_path') is None:
-    #         return 
+    def __attrs_post_init__(self):
+        if self.output_path is None:
+            pass
+            
 
 class HpTuningType(Enum):
     CATEGORICAL = auto()
@@ -85,6 +88,8 @@ class MLAgentsBaseConfig:
     '''
     Leave these as dictionaries, validation of the fields will be performed when mlagents is called.
     '''
+    # TODO: For internal usage only, only here for dependency requirements. Implement this so that we can automatically call find_hyperparm_to_tune here 
+    # _algorithm: str = parser.get_default('algorithm')
     # Don't strictly need this, just here for backup
     default_settings: Dict = attr.ib(factory=lambda :{'default_settings': {'trainer_type': 'ppo', 'hyperparameters': {'batch_size': 'log_unif(64, 16384)', 'buffer_size': 'log_unif(2000, 50000)', 'learning_rate': 'log_unif(0.0003, 0.01)', 'beta': 'log_unif(0.001, 0.03)', 'epsilon': 0.2, 'lambd': 'unif(0.95, 1.0)', 'num_epoch': 3, 'learning_rate_schedule': 'linear'}, 'network_settings': {'normalize': True, 'hidden_units': [64, 256, 512, 1024], 'num_layers': 'unif(1, 3)', 'vis_encode_type': 'simple'}, 'reward_signals': {'extrinsic': {'gamma': 'unif(0.9, 1.0)', 'strength': 1.0}}, 'keep_checkpoints': 5, 'max_steps': 100000, 'time_horizon': 1000, 'summary_freq': 10000}})
     env_settings: Dict = attr.ib(factory=dict)
@@ -160,39 +165,39 @@ class RealmTuneConfig:
         # Find hyperparameters to tune
         self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
 
-        # TODO: Find behavior name from Unity env if it is not passed in
-        # For now, assert that behavior name is passed in
-        assert self.realm_ai.behavior_name is not None, "We need a behavior name!"
-
-
-    @staticmethod
-    def _from_yaml_file(path_to_yaml_file): 
-        converter = Converter()
-        converter.register_structure_hook(WandBSettings, WandBSettings.structure_from_yaml)
-        with open(path_to_yaml_file) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-
-        # Ensure that all fields in realm_ai portion of yaml file are valid - we leave validation of mlagents and values of the fields to their own functions
-        if 'realm_ai' in config:
-            for k, v in config['realm_ai'].items():
-                assert k in attr.fields_dict(RealmTuneBaseConfig), f'"{k}" field is not supported in {path_to_yaml_file}!'
-        return converter.structure(config, RealmTuneConfig)
-
     @staticmethod
     def from_argparse(args: argparse.Namespace):
-        realm_tune_config = RealmTuneConfig._from_yaml_file(args.config_path)
-        dict_ = cattr.unstructure(realm_tune_config)
+        converter = Converter()
+        converter.register_structure_hook(WandBSettings, WandBSettings.structure)
+        
+        # Load from file first
+        config = load_yaml_file(args.config_path)
+
+        # Cli arguments take precedence over config file - override config if needed
         for k, v in vars(args).items():
             if k in DetectDefault.non_default_args:
-                if k in attr.fields_dict(RealmTuneBaseConfig):
-                    dict_['realm_ai'][k] = v
-                elif k in attr.fields_dict(WandBSettings):
-                    dict_['realm_ai']['wandb'][k] = v
+                if k in attr.fields_dict(WandBSettings):
+                    if 'wandb' not in config:
+                        config['realm_ai']['wandb'] = {}
+                    config['realm_ai']['wandb'][k] = v
+                elif k in attr.fields_dict(RealmTuneBaseConfig):
+                    config['realm_ai'][k] = v
                 else:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
-        realm_tune_config = cattr.structure(dict_, RealmTuneConfig)
-        realm_tune_config.init_and_validate()
+        
+        realm_tune_config = converter.structure(config, RealmTuneConfig)
+        realm_tune_config._init_and_validate()
         return realm_tune_config
+
+def load_yaml_file(path_to_yaml_file): 
+    with open(path_to_yaml_file) as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    # Ensure that all fields in realm_ai portion of yaml file are valid - we leave validation of mlagents and values of the fields to their own functions
+    if 'realm_ai' in config:
+        for k, v in config['realm_ai'].items():
+            assert k in attr.fields_dict(RealmTuneBaseConfig), f'"{k}" field is not supported in {path_to_yaml_file}!'
+    return config
 
 
 # For debugging purposes
@@ -200,8 +205,9 @@ if __name__=='__main__':
     # args = parser.parse_args(["--config-path","realm_tune/bayes.yaml"])
     # item = RealmTuneConfig.from_yaml_file(args.config_path)
     # print(item)
-
-    config = cattr.unstructure(RealmTuneConfig.from_argparse(parser.parse_args(["--config-path","realm_tune/bayes.yaml"])))
+    args = parser.parse_args(["--config-path","realm_tune/bayes.yaml",])
+    # print(vars(args))
+    config = cattr.unstructure(RealmTuneConfig.from_argparse(args))
     print(config)
     # with open(f'test.yaml', 'w') as f:
             # yaml.dump(config, f, default_flow_style=False)
