@@ -3,6 +3,7 @@ from typing import Dict, Optional, Set, Union
 from enum import Enum, auto
 import warnings
 import os
+import time
 
 import attr
 import cattr
@@ -73,7 +74,8 @@ class RealmTuneBaseConfig:
 
     def __attrs_post_init__(self):
         if self.output_path is None:
-            pass
+            self.output_path = f'{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
+        # TODO: create folder if it does not already exist!
             
 
 class HpTuningType(Enum):
