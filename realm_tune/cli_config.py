@@ -40,10 +40,12 @@ def _create_parser() -> argparse.ArgumentParser:
     parser.add_argument('--env-path', type=str, default=None, help="Path to environment. If specified, overrides env_path in the config file", action=DetectDefault)
 
     wandb_config = parser.add_argument_group(title="Weights and Biases Configuration")
-    wandb_config.add_argument('--wandb', action=DetectDefaultStoreTrue)
+    # Have an explicit field just so that if users want to keep everything default
+    wandb_config.add_argument('--use-wandb', action=DetectDefaultStoreTrue)
+    # If user uses any of the following wandb fields, it automatically infers that they intend to use wandb!
     wandb_config.add_argument('--wandb-project', type=str, action=DetectDefault, default='realm_tune')
     wandb_config.add_argument('--wandb-entity', type=str, default=None, action=DetectDefault)
-    wandb_config.add_argument('--wandb-offline', action=DetectDefaultStoreTrue, default='realm_tune')
+    wandb_config.add_argument('--wandb-offline', action=DetectDefaultStoreTrue)
     wandb_config.add_argument('--wandb-group', type=str, default=None, action=DetectDefault)
     wandb_config.add_argument('--wandb-jobtype', type=str, default=None, action=DetectDefault)
 
