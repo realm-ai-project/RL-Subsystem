@@ -10,7 +10,7 @@ wandb:
     entity: <default: None>
     offline: <default: False>
     group: <default: None>
-    job_type: <default: None>
+    jobtype: <default: None> # "job_type" is accepted too! 
 ```
 
 ## Note
