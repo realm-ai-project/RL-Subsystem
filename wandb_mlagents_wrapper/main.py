@@ -55,11 +55,17 @@ class WandBMLAgentsWrapper:
         if self.use_wandb:
             config = deepcopy(config)
             del config['wandb']
-            fd, self.temp_filename = tempfile.mkstemp(suffix='.yml')
-            with open(fd, 'w') as f:
-                yaml.dump(config, f, default_flow_style=False) 
-            # Override argument with temp file
-            self.arguments[self.arguments.index(config_file_name)] = self.temp_filename
+            if len(config)<1:
+                # If there's nothing in the config file
+                del self.arguments[self.arguments.index(config_file_name)] 
+                self.temp_filename = None
+            else:
+                # Override argument with temp file
+                fd, self.temp_filename = tempfile.mkstemp(suffix='.yml')
+                with open(fd, 'w') as f:
+                    yaml.dump(config, f, default_flow_style=False) 
+                self.arguments[self.arguments.index(config_file_name)] = self.temp_filename
+
     
     def run_training(self):
         mlagents_config = parse_command_line(argv=self.arguments[1:])
@@ -74,7 +80,7 @@ class WandBMLAgentsWrapper:
         
         run_cli(mlagents_config)
 
-        if self.use_wandb:
+        if self.use_wandb and self.temp_filename:
             os.remove(self.temp_filename)
 
 def main():

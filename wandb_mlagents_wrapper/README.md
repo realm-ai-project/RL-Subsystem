@@ -1,10 +1,11 @@
 # WandB MLAgents Wrapper
 
 ## Usage
-To use WandB with ML-Agents, simply define an extra field in the config file that is otherwise completely compatible with ML-Agents Python package.
+To use WandB with ML-Agents, simply add an extra "wandb" field in a config file that is otherwise completely compatible with ML-Agents Python package.
 To run, enter `wandb-mlagents-learn` in the terminal. This wrapper accepts the same cli arguments as `mlagents-learn`. This program can be used as a standalone passthrough for `mlagents-learn`.
 
 ## Supported arguments
+At minimum, here is what the `.yaml` config file should contain:
 ```
 wandb:
     project: <default: realm_ai>
@@ -15,4 +16,6 @@ wandb:
 ```
 
 ## Note
-- Resuming a run does not work (yet)
+- Resuming a run on wandb does not work (yet)
+- If we intend to use mlagents default parameters, it is okay to pass in a config file that solely contains wandb config (as shown above)
+- If "wandb" is not defined in the config file, wandb will not be used, and functionality will then be identical to mlagents!
