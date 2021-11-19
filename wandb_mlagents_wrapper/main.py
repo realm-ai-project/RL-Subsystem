@@ -56,7 +56,8 @@ class WandBMLAgentsWrapper:
             config = deepcopy(config)
             del config['wandb']
             if len(config)<1:
-                # If there's nothing in the config file
+                # If there's nothing else in the config file (other than wandb settings), 
+                # don't pass empty config file to mlagents!
                 del self.arguments[self.arguments.index(config_file_name)] 
                 self.temp_filename = None
             else:
