@@ -23,7 +23,6 @@ class WandBMLAgentsWrapper:
         self.offline = False
         self.group = None
         self.job_type = None
-        self.behavior_name = ''
         self.__parse_arguments()
 
     def __parse_arguments(self):
@@ -44,9 +43,7 @@ class WandBMLAgentsWrapper:
         if 'wandb' in config:
             self.use_wandb = True
             wandb_config = config['wandb']
-            assert 'behavior_name' in wandb_config, "Must include behavior name!"
             if wandb_config is not None:
-                self.behavior_name = wandb_config['behavior_name']
                 self.project =  wandb_config.get('project', self.project)
                 self.entity = wandb_config.get('entity', self.entity)
                 self.offline = wandb_config.get('offline', self.offline)
@@ -90,13 +87,17 @@ class WandBMLAgentsWrapper:
         if self.use_wandb:
             if self.temp_filename:
                 os.remove(self.temp_filename)
-            final_rew = self._evaluate(mlagents_config.checkpoint_settings.write_path, self.behavior_name)
+            final_rew = self._evaluate(mlagents_config.checkpoint_settings.write_path)
             wandb_run.summary['final_reward'] = final_rew
             wandb_run.finish()
 
-    def _evaluate(self, directory, behavior_name) -> int: 
-        logdir = f"./{directory}/{behavior_name}/events*"
-        eventfile = glob.glob(logdir)[0]
+    def _evaluate(self, directory) -> int: 
+        logdir = f"./{directory}/*/events.out.tfevents*"
+        eventfiles = glob.glob(logdir)
+        assert len(eventfiles)>0, "TensorBoard event file not found!"
+        if len(eventfiles)>1:
+            warnings.warn("Multiple TensorBoard event files found, using the first one...")
+        eventfile = eventfiles[0]
         rew = [value.simple_value 
         for serialized_example in tf.data.TFRecordDataset(eventfile) 
             for value in event_pb2.Event.FromString(serialized_example.numpy()).summary.value 

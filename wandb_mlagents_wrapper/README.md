@@ -8,7 +8,6 @@ To run, enter `wandb-mlagents-learn` in the terminal. This wrapper accepts the s
 At minimum, here is what the `.yaml` config file should contain:
 ```
 wandb:
-    behavior_name: # Mandatory field!
     project: <default: realm_ai>
     entity: <default: None>
     offline: <default: False>
