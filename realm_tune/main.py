@@ -18,6 +18,8 @@ from tensorflow.core.util import event_pb2
 import optuna
 from optuna.samplers import TPESampler, RandomSampler, GridSampler
 import wandb
+from mlagents.trainers.learn import run_cli, parse_command_line
+from mlagents_envs.environment import UnityEnvironment # We can extract behavior-name from here!
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
@@ -92,7 +94,7 @@ class OptunaHyperparamTuner:
 
         run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
         if self.use_wandb:
-            wandb_run = wandb.init(entity=self.config['realm_ai']['wandb']['entity'], group=self.config['realm_ai']['folder_name'], project=self.config['realm_ai']['wandb']['project'], reinit=True)
+            wandb_run = wandb.init(entity=self.config['realm_ai']['wandb']['entity'], group=self.config['realm_ai']['folder_name'], project=self.config['realm_ai']['wandb']['project'], reinit=True, sync_tensorboard=True, job_type=self.wandb_jobtype)
             wandb_run.name = f"{run_id}_{wandb_run.id}"
         
         curr_config = deepcopy(self.config['mlagents'])
@@ -132,7 +134,7 @@ class OptunaHyperparamTuner:
 
         if self.use_wandb:
             wandb.summary["Average Reward"] = score
-            wandb.Api(overrides={'entity':self.config['realm_ai']['wandb']['entity']}).sync_tensorboard(root_dir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", run_id=wandb_run.id, project=self.config['realm_ai']['wandb']['project'])
+            # wandb.Api(overrides={'entity':self.config['realm_ai']['wandb']['entity']}).sync_tensorboard(root_dir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", run_id=wandb_run.id, project=self.config['realm_ai']['wandb']['project'])
             wandb_run.finish()
 
         return score
@@ -233,13 +235,12 @@ class OptunaHyperparamTuner:
         if self.folder is None:
             self.folder = f'{self.config["realm_ai"]["behavior_name"]}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
         
-        if self.use_wandb: # Delete existing runs under the same folder (group) on wandb if it already exists
-            path = f"{self.config['realm_ai']['wandb']['entity']}/{self.config['realm_ai']['wandb']['project']}"
-            runs_to_delete = wandb.Api().runs(path=path, filters={"group":self.folder}, per_page=1000)
+        # if self.use_wandb: # Delete existing runs under the same folder (group) on wandb if it already exists
+        #     path = f"{self.config['realm_ai']['wandb']['entity']}/{self.config['realm_ai']['wandb']['project']}"
+        #     runs_to_delete = wandb.Api().runs(path=path, filters={"group":self.folder}, per_page=1000)
             
-            for run in runs_to_delete:
-                run.delete()
-
+        #     for run in runs_to_delete:
+        #         run.delete()
 
         if os.path.isdir(self.folder):
             raise FileExistsError(f'"{self.folder}/" already exists, and no checkpoint exists in that folder. Please rename folder_name in config file, or delete the folder!')
@@ -248,6 +249,11 @@ class OptunaHyperparamTuner:
             os.mkdir(self.folder)
 
         os.chdir(self.folder)
+
+        if self.use_wandb:
+            wandb_metadata = {"job_type":time.strftime("%d-%m-%Y_%H-%M-%S")}
+            self.wandb_jobtype = wandb_metadata['job_type']
+            pickle.dump(wandb_metadata, open( "wandb_metadata.pkl", "wb" ) )
 
         sampler = self.__get_sampler()
         study = optuna.create_study(study_name=self.folder, sampler=sampler, direction="maximize")
@@ -265,6 +271,14 @@ class OptunaHyperparamTuner:
         for trial in study.trials:
             if trial.state.is_finished():
                 new_study.add_trial(trial)
+        
+        if self.use_wandb:
+            if not os.path.isfile("wandb_metadata.pkl"):
+                warning("Restoring from checkpoint but wandb metadata not found!")
+                self.wandb_jobtype = time.strftime("%d-%m-%Y_%H-%M-%S")
+            else:
+                self.wandb_jobtype = pickle.load( open( "wandb_metadata.pkl", "rb" ) )['job_type']
+
         # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
         if self.config['realm_ai']['total_trials'] <= len(new_study.trials):
             warning(f'{len(new_study.trials)} completed trials already found in folder "{folder_name}". Exiting...')
