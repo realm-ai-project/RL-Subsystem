@@ -13,8 +13,7 @@ setup(
     ],
     python_requires=">=3.6.1",
     packages=find_packages(include=['realm_train', 'realm_tune', 'wandb_mlagents_wrapper']),
-    package_data={'': ['realm_tune/default.yaml']},
-    include_package_data=True,
+    package_data={'realm_tune': ['default.yaml']},
     entry_points={
         "console_scripts": [
             "realm-tune=realm_tune.main:main",
