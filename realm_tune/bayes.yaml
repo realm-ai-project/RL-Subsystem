@@ -4,10 +4,10 @@ realm_ai:
   total_trials: 3 # total number of trials (inclusive of warmup_trials)
   warmup_trials: 5 # optional for bayes algorithm, number of "warmup" trials where random hyperparams are used. Default val is 5
   eval_window_size: 1 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
-  folder_name: test # optional, specify to manually specify folder name, or to continue running
-  full_run_after_tuning: # optional, if specified, config in "best_trial" folder will be changed to reflect the following. If this is specified, run_id should be specified so that we know the name of the folder!
-    max_steps: 20000 # number of steps to run for the full training
-    run_id: full_run # name of the complete training run
+  # output_path: test # optional, specify to manually specify folder name, or to continue running
+  # full_run_after_tuning: # optional, if specified, config in "best_trial" folder will be changed to reflect the following. If this is specified, run_id should be specified so that we know the name of the folder!
+  #   max_steps: 20000 # number of steps to run for the full training
+  #   run_id: full_run # name of the complete training run
   # wandb: # optional, if specified, log training metrics to wandb. Must be online to use!
   #   project: realm_tune 
   #   entity: <username>
