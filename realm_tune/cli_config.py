@@ -28,6 +28,7 @@ class DetectDefaultStoreTrue(DetectDefault):
     def __call__(self, arg_parser, namespace, values, option_string=None):
         super().__call__(arg_parser, namespace, True, option_string)
 
+# TODO: Add descriptions to cli arguments
 def _create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
     parser.add_argument('--config-path', default=f'{os.path.dirname(os.path.realpath(__file__))}/default.yaml', action=DetectDefault)

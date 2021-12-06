@@ -7,6 +7,7 @@ import time
 
 import attr
 import cattr
+from cattr.gen import make_dict_unstructure_fn, override
 from cattr.converters import Converter
 import wandb
 import yaml
@@ -45,6 +46,19 @@ class WandBSettings:
                 else:
                     warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         return WandBSettings(**dict_)
+    
+    def to_dict(self) -> Dict:
+        c = cattr.Converter()
+        unst_hook = make_dict_unstructure_fn(
+            WandBSettings, 
+            c, 
+            wandb_project=override(rename="project"), 
+            wandb_entity=override(rename="entity"),
+            wandb_offline=override(rename="offline"),
+            wandb_group=override(rename="group"),
+            wandb_jobtype=override(rename="jobtype"))
+        c.register_unstructure_hook(WandBSettings, unst_hook)
+        return c.unstructure(self)
 
 
 @attr.s(auto_attribs=True)
@@ -74,9 +88,7 @@ class RealmTuneBaseConfig:
 
     def __attrs_post_init__(self):
         if self.output_path is None:
-            self.output_path = f'{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
-        # TODO: create folder if it does not already exist!
-            
+            self.output_path = f'./runs/{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'            
 
 class HpTuningType(Enum):
     CATEGORICAL = auto()
