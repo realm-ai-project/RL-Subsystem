@@ -47,17 +47,28 @@ class WandBSettings:
                     warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         return WandBSettings(**dict_)
     
+    @staticmethod
+    def unstructure(obj):
+        return {
+            "project": obj.wandb_project,
+            "entity": obj.wandb_entity,
+            "offline": obj.wandb_offline,
+            "group": obj.wandb_group,
+            "jobtype": obj.wandb_jobtype
+        } if obj.use_wandb else {}
+
     def to_dict(self) -> Dict:
         c = cattr.Converter()
-        unst_hook = make_dict_unstructure_fn(
-            WandBSettings, 
-            c, 
-            wandb_project=override(rename="project"), 
-            wandb_entity=override(rename="entity"),
-            wandb_offline=override(rename="offline"),
-            wandb_group=override(rename="group"),
-            wandb_jobtype=override(rename="jobtype"))
-        c.register_unstructure_hook(WandBSettings, unst_hook)
+        # unst_hook = make_dict_unstructure_fn(
+        #     WandBSettings, 
+        #     c, 
+        #     wandb_project=override(rename="project"), 
+        #     wandb_entity=override(rename="entity"),
+        #     wandb_offline=override(rename="offline"),
+        #     wandb_group=override(rename="group"),
+        #     wandb_jobtype=override(rename="jobtype"))
+        # c.register_unstructure_hook(WandBSettings, unst_hook)
+        c.register_unstructure_hook(WandBSettings, WandBSettings.unstructure)
         return c.unstructure(self)
 
 
@@ -112,6 +123,13 @@ class MLAgentsBaseConfig:
     checkpoint_settings: Dict = attr.ib(factory=dict)
     torch_settings: Dict = attr.ib(factory=dict)
     debug: bool = False        
+
+    @checkpoint_settings.validator
+    def _check_checkpoint_settings(self, attribute, value):
+        if 'run_id' in value:
+            warnings.warn(f'"run_id":"{value["run_id"]}" field will be overwritten!')
+        if 'force' in value:
+            warnings.warn(f'"force":"{value["force"]}" field will be overwritten!')
 
     def find_hyperparameters_to_tune(self, algo):
         '''
@@ -175,7 +193,7 @@ class RealmTuneConfig:
             raise ValueError('Realm-tune does not support in-editor training! Please pass in a --config-path flag, or add env_path to yaml file under the mlagents config')
         elif self.realm_ai.env_path is not None and 'env_path' in self.mlagents.env_settings:
             if self.realm_ai.env_path != self.mlagents.env_settings['env_path']:
-                warnings.warn(f'env_path parameter set under mlagents in the .yaml file will be overriden with {self.realm_ai.env_path}')
+                warnings.warn(f'"env_path" parameter set under mlagents in the .yaml file will be overwritten with {self.realm_ai.env_path}')
                 self.mlagents.env_settings['env_path'] = self.realm_ai.env_path
         elif self.realm_ai.env_path is None:
             self.realm_ai.env_path = self.mlagents.env_settings['env_path']
