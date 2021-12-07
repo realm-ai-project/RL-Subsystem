@@ -9,9 +9,10 @@ setup(
         "mlagents",
         "optuna",
         "wandb",
+        "cattrs>=1.9.0", # older versions may not be supported
         "tensorflow>=2.0.0" # Not tested
     ],
-    python_requires=">=3.6.1",
+    python_requires=">=3.7", # tested with python 3.8
     packages=find_packages(include=['realm_train', 'realm_tune', 'wandb_mlagents_wrapper']),
     package_data={'realm_tune': ['default.yaml']},
     entry_points={
