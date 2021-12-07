@@ -89,8 +89,6 @@ class RealmTuneBaseConfig:
     def __attrs_post_init__(self):
         if self.output_path is None:
             self.output_path = f'./runs/{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}' 
-        if not os.path.isdir(self.output_path):
-            os.makedirs(self.output_path)
 
 class HpTuningType(Enum):
     CATEGORICAL = auto()

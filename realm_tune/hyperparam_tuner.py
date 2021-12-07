@@ -21,6 +21,7 @@ from mlagents.trainers.learn import run_cli, parse_command_line
 from mlagents_envs.environment import UnityEnvironment # We can extract behavior-name from here!
 
 from realm_tune.settings import RealmTuneConfig, HpTuningType
+
 class OptunaHyperparamTuner:
     def __init__(self, config: RealmTuneConfig):
         self.config = config
@@ -96,13 +97,5 @@ class OptunaHyperparamTuner:
                 if value.tag == 'Environment/Cumulative Reward']
         return statistics.mean(rew[-self.config['realm_ai']['eval_window_size']:])
 
-    def __get_sampler(self)-> optuna.samplers.BaseSampler:
-        if self.algo == 'bayes':
-            return TPESampler(n_startup_trials=self.config['realm_ai']['warmup_trials']) # TODO: change to have default values instead when loading config
-        elif self.algo == 'random':
-            return RandomSampler()
-        elif self.algo == 'grid':
-            search_space = {i:v for i, _, v in self.hyperparameters_to_tune}
-            return GridSampler(search_space)
 
     
