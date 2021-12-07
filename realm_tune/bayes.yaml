@@ -4,6 +4,7 @@ realm_ai:
   total_trials: 3 # total number of trials (inclusive of warmup_trials)
   warmup_trials: 5 # optional for bayes algorithm, number of "warmup" trials where random hyperparams are used. Default val is 5
   eval_window_size: 1 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
+  env_path: ../../../../../Unity/envs/3dball/3dball
   # output_path: test # optional, specify to manually specify folder name, or to continue running
   # full_run_after_tuning: # optional, if specified, config in "best_trial" folder will be changed to reflect the following. If this is specified, run_id should be specified so that we know the name of the folder!
   #   max_steps: 20000 # number of steps to run for the full training
@@ -15,7 +16,7 @@ realm_ai:
 
 mlagents: # all values here (even those that are commented out) are used by the script. Other possible configs that are not here can be added at the discretion of the user.
   env_settings:
-    env_path: ../../../../../Unity/envs/3dball/3dball
+    # env_path: ../../../../../Unity/envs/3dball/3dball
     env_args: null
     num_envs: 4
     seed: 0

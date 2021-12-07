@@ -88,7 +88,9 @@ class RealmTuneBaseConfig:
 
     def __attrs_post_init__(self):
         if self.output_path is None:
-            self.output_path = f'./runs/{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'            
+            self.output_path = f'./runs/{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}' 
+        if not os.path.isdir(self.output_path):
+            os.makedirs(self.output_path)
 
 class HpTuningType(Enum):
     CATEGORICAL = auto()
@@ -169,13 +171,23 @@ class RealmTuneConfig:
     realm_ai: RealmTuneBaseConfig = attr.ib(factory=RealmTuneBaseConfig)
     mlagents: MLAgentsBaseConfig = attr.ib(factory=MLAgentsBaseConfig)
 
-    def _init_and_validate(self):
+    def _validate_env_path(self):
         # Ensure that env_path is set somewhere
         if self.realm_ai.env_path is None and 'env_path' not in self.mlagents.env_settings:
             raise ValueError('Realm-tune does not support in-editor training! Please pass in a --config-path flag, or add env_path to yaml file under the mlagents config')
-        if 'env_path' not in self.mlagents.env_settings:
+        elif self.realm_ai.env_path is not None and 'env_path' in self.mlagents.env_settings:
+            if self.realm_ai.env_path != self.mlagents.env_settings['env_path']:
+                warnings.warn(f'env_path parameter set under mlagents in the .yaml file will be overriden with {self.realm_ai.env_path}')
+                self.mlagents.env_settings['env_path'] = self.realm_ai.env_path
+        elif self.realm_ai.env_path is None:
+            self.realm_ai.env_path = self.mlagents.env_settings['env_path']
+        else:
             self.mlagents.env_settings['env_path'] = self.realm_ai.env_path
         
+        assert self.realm_ai.env_path == self.mlagents.env_settings['env_path'], "both environment paths should tally, bug in code!"
+
+    def _post_init_and_validate(self):
+        self._validate_env_path()
         # Find hyperparameters to tune
         self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
 
@@ -186,6 +198,11 @@ class RealmTuneConfig:
         
         # Load from file first
         config = load_yaml_file(args.config_path)
+
+        # Ensure that all fields in realm_ai portion of yaml file are valid - we leave validation of mlagents and values of the fields to their own functions
+        if 'realm_ai' in config:
+            for k, v in config['realm_ai'].items():
+                assert k in attr.fields_dict(RealmTuneBaseConfig), f'"{k}" field is not supported in {args.config_path}!'
 
         # Cli arguments take precedence over config file - override config if needed
         for k, v in vars(args).items():
@@ -200,17 +217,14 @@ class RealmTuneConfig:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         
         realm_tune_config = converter.structure(config, RealmTuneConfig)
-        realm_tune_config._init_and_validate()
+        realm_tune_config._post_init_and_validate()
         return realm_tune_config
+
 
 def load_yaml_file(path_to_yaml_file): 
     with open(path_to_yaml_file) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    # Ensure that all fields in realm_ai portion of yaml file are valid - we leave validation of mlagents and values of the fields to their own functions
-    if 'realm_ai' in config:
-        for k, v in config['realm_ai'].items():
-            assert k in attr.fields_dict(RealmTuneBaseConfig), f'"{k}" field is not supported in {path_to_yaml_file}!'
     return config
 
 
