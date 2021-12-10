@@ -6,96 +6,81 @@ from logging import warning
 import shutil
 import cattr
 import argparse
+import warnings
 
 import optuna
-
-from realm_tune.settings import RealmTuneConfig
+from optuna.samplers import TPESampler, RandomSampler, GridSampler
+from realm_tune.hyperparam_tuner import OptunaHyperparamTuner
+from realm_tune.settings import RealmTuneConfig, WandBSettings
 from realm_tune.cli_config import parser
 
 class Runner:
     def __init__(self, options: RealmTuneConfig):
-        self.options = options
+        self.options: RealmTuneConfig = options
 
     @staticmethod
     def from_argparse(args: argparse.Namespace):
-        options = cattr.unstructure(RealmTuneConfig.from_argparse(args))
+        options = RealmTuneConfig.from_argparse(args)
         return Runner(options)
 
-    def run_from_scratch(self, folder_name=None) -> optuna.Study:
-        self.folder = folder_name
-        if self.folder is None:
-            self.folder = f'{self.config["realm_ai"]["behavior_name"]}_{time.strftime("%d-%m-%Y_%H-%M-%S")}'
+    def _run_from_scratch(self) -> optuna.Study:
+        assert len(os.listdir('.'))==0, f'{self.options.realm_ai.output_path} is not empty but checkpoint file not found. Please delete folder and try again'
         
-        # if self.use_wandb: # Delete existing runs under the same folder (group) on wandb if it already exists
-        #     path = f"{self.config['realm_ai']['wandb']['entity']}/{self.config['realm_ai']['wandb']['project']}"
-        #     runs_to_delete = wandb.Api().runs(path=path, filters={"group":self.folder}, per_page=1000)
-            
-        #     for run in runs_to_delete:
-        #         run.delete()
-
-        if os.path.isdir(self.folder):
-            raise FileExistsError(f'"{self.folder}/" already exists, and no checkpoint exists in that folder. Please rename folder_name in config file, or delete the folder!')
-        else:
-            print('Creating folder named', self.folder)
-            os.mkdir(self.folder)
-
-        os.chdir(self.folder)
-
-        if self.use_wandb:
-            wandb_metadata = {"job_type":time.strftime("%d-%m-%Y_%H-%M-%S")}
-            self.wandb_jobtype = wandb_metadata['job_type']
+        if self.options.realm_ai.wandb.use_wandb:
+            wandb_metadata = self.options.realm_ai.wandb.to_dict()
             pickle.dump(wandb_metadata, open( "wandb_metadata.pkl", "wb" ) )
 
-        sampler = self.__get_sampler()
-        study = optuna.create_study(study_name=self.folder, sampler=sampler, direction="maximize")
+        sampler = self._get_sampler()
+        study = optuna.create_study(study_name=self.options.realm_ai.output_path, sampler=sampler, direction="maximize")
         return study
 
-    def restore_from_checkpoint(self) -> optuna.Study:
-        sampler = get_sampler()
-        new_study = optuna.create_study(study_name=self.folder, sampler=sampler, direction="maximize")
+    def _restore_from_checkpoint(self) -> optuna.Study:
+        sampler = self._get_sampler()
+        new_study = optuna.create_study(sampler=sampler, direction="maximize")
+
         study = pickle.load( open( "optuna_study.pkl", "rb" ) )
         for trial in study.trials:
             if trial.state.is_finished():
                 new_study.add_trial(trial)
         
-        if self.use_wandb:
+        if self.options.realm_ai.wandb.use_wandb:
             if not os.path.isfile("wandb_metadata.pkl"):
                 warning("Restoring from checkpoint but wandb metadata not found!")
-                self.wandb_jobtype = time.strftime("%d-%m-%Y_%H-%M-%S")
             else:
-                self.wandb_jobtype = pickle.load( open( "wandb_metadata.pkl", "rb" ) )['job_type']
+                metadata = pickle.load(open("wandb_metadata.pkl", "rb"))
+                self.options.realm_ai.wandb = WandBSettings.structure(metadata, None)
 
         # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
-        if self.config['realm_ai']['total_trials'] <= len(new_study.trials):
-            warning(f'{len(new_study.trials)} completed trials already found in folder "{folder_name}". Exiting...')
+        if self.options.realm_ai.total_trials <= len(new_study.trials):
+            warning(f'{len(new_study.trials)} completed trials already found in folder "{os.getcwd()}". Exiting...')
             exit(0)
         print(f'Resuming from {len(new_study.trials)} completed trials')
         return new_study
 
-    def get_sampler(self)-> optuna.samplers.BaseSampler:
-        if self.algo == 'bayes':
-            return TPESampler(n_startup_trials=self.config['realm_ai']['warmup_trials']) # TODO: change to have default values instead when loading config
-        elif self.algo == 'random':
+    def _get_sampler(self)-> optuna.samplers.BaseSampler:
+        if self.options.realm_ai.algorithm == 'bayes':
+            return TPESampler(n_startup_trials=self.options.realm_ai.warmup_trials)
+        elif self.options.realm_ai.algorithm == 'random':
             return RandomSampler()
-        elif self.algo == 'grid':
-            search_space = {i:v for i, _, v in self.hyperparameters_to_tune}
+        elif self.options.realm_ai.algorithm == 'grid':
+            search_space = {i:v for i, _, v in self.options.mlagents.hyperparameters_to_tune}
             return GridSampler(search_space)
 
-    def run_cli(self):
-        if not os.path.isdir(self.options.realm_ai.output_path):
-            os.makedirs(self.options.realm_ai.output_path)
+    def run(self):
+        
         os.chdir(self.options.realm_ai.output_path)
 
         print('Results will be stored in', os.getcwd())
 
         if os.path.isfile("./optuna_study.pkl"):
-            study = restore_from_checkpoint()
+            study = self._restore_from_checkpoint()
         else:
-            study = self.run_from_scratch(folder_name=self.config['realm_ai']['folder_name'] if 'folder_name' in self.config['realm_ai'] else None)
+            study = self._run_from_scratch()
         
+        hyperparam_tuner = OptunaHyperparamTuner(self.options)
         interrupted = False
         try:
-            study.optimize(self, n_trials=self.config['realm_ai']['total_trials']-len(study.trials))
+            study.optimize(hyperparam_tuner, n_trials=self.options.realm_ai.total_trials-len(study.trials))
         except KeyboardInterrupt:
             interrupted = True
 
@@ -108,7 +93,7 @@ class Runner:
             exit(0)
         
         trial = study.best_trial
-        best_trial_name = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
+        best_trial_name = f"{self.options.realm_ai.behavior_name}_{trial.number}"
         print(f"\nBest trial: {best_trial_name}")
 
         if os.path.isdir('best_trial'):
@@ -120,7 +105,8 @@ class Runner:
 
 def main():
     args = parser.parse_args(["--config-path","realm_tune/bayes.yaml",])
-    
+    runner = Runner.from_argparse(args)
+    runner.run()
 
 if __name__ == "__main__":
     main()
