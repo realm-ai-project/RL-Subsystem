@@ -1,5 +1,7 @@
 import argparse
 from logging import warning
+import warnings
+import cattr
 import yaml
 from copy import deepcopy
 import os
@@ -20,12 +22,13 @@ import wandb
 from mlagents.trainers.learn import run_cli, parse_command_line
 from mlagents_envs.environment import UnityEnvironment # We can extract behavior-name from here!
 
-from realm_tune.settings import RealmTuneConfig, HpTuningType
+from realm_tune.settings import MLAgentsBaseConfig, RealmTuneConfig, HpTuningType
 
 class OptunaHyperparamTuner:
-    def __init__(self, config: RealmTuneConfig):
-        self.config = config
-        pass
+    def __init__(self, options: RealmTuneConfig):
+        self.options: RealmTuneConfig = options
+        self.hyperparameters_to_tune = self.options.mlagents.hyperparameters_to_tune
+        self.hyperparams_path = self.options.mlagents.hyperparams_path
 
     def __call__(self, trial: optuna.trial.Trial) -> float:
         '''
@@ -33,12 +36,9 @@ class OptunaHyperparamTuner:
         '''
         print(f'Running trial {trial.number}')
 
-        run_id = f"{self.config['realm_ai']['behavior_name']}_{trial.number}"
-        if self.use_wandb:
-            wandb_run = wandb.init(entity=self.config['realm_ai']['wandb']['entity'], group=self.config['realm_ai']['folder_name'], project=self.config['realm_ai']['wandb']['project'], reinit=True, sync_tensorboard=True, job_type=self.wandb_jobtype)
-            wandb_run.name = f"{run_id}_{wandb_run.id}"
+        run_id = f"{self.options.realm_ai.behavior_name}_{trial.number}"
         
-        curr_config = deepcopy(self.config['mlagents'])
+        curr_config = deepcopy(self.options.mlagents)
         for hyperparam, hpTuningType, values in self.hyperparameters_to_tune:
             if hpTuningType==HpTuningType.CATEGORICAL:
                 val = trial.suggest_categorical(hyperparam, values)
@@ -54,48 +54,43 @@ class OptunaHyperparamTuner:
                 raise NotImplementedError(f'{hpTuningType}: Unknown type of hyperparameter')
             
             # Traverse recursively into config dictionary to replace value
-            tmp_pointer = curr_config['default_settings']
+            tmp_pointer = curr_config.default_settings
             for i in self.hyperparams_path[hyperparam][:-1]:
                 tmp_pointer = tmp_pointer[i]
             tmp_pointer[hyperparam] = val
-            
-            if self.use_wandb:
-                wandb_run.config[hyperparam] = val
         
+        self._create_config_file(run_id, curr_config)
 
-        self.__create_config_file(run_id, curr_config)
+        subprocess.run(["wandb-mlagents-learn", f"{run_id}.yml", "--force"])
 
-        subprocess.run(["mlagents-learn", f"{run_id}.yml", "--force"])
-        # run_cli(parse_command_line(argv=[f"{run_id}.yml", "--force"]))
-
-        # if self.tensorboard_url is None:
-        #     self.__launch_tensorboard()
-        score = self.__evaluate(run_id)
+        score = self._evaluate(run_id)
         print(f'Score for trial {trial.number}: {score}')
-
-        if self.use_wandb:
-            wandb.summary["Average Reward"] = score
-            # wandb.Api(overrides={'entity':self.config['realm_ai']['wandb']['entity']}).sync_tensorboard(root_dir=f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}", run_id=wandb_run.id, project=self.config['realm_ai']['wandb']['project'])
-            wandb_run.finish()
 
         return score
 
-    def __create_config_file(self, run_id, config):
+    def _create_config_file(self, run_id: str, config: MLAgentsBaseConfig):
         '''
         Create a config file for the given configuration
         '''
-        config['checkpoint_settings']['run_id'] = run_id
+        config.checkpoint_settings['run_id'] = run_id
+        config_dict = config.to_dict()
+        if self.options.realm_ai.wandb.use_wandb:
+            config_dict['wandb'] = self.options.realm_ai.wandb.to_dict()
         with open(f'{run_id}.yml', 'w') as f:
-            yaml.dump(config, f, default_flow_style=False) 
+            yaml.dump(config_dict, f, default_flow_style=False) 
 
-    def __evaluate(self, run_id) -> int: 
-        logdir = f"./results/{run_id}/{self.config['realm_ai']['behavior_name']}/events*"
-        eventfile = glob.glob(logdir)[0]
+    def _evaluate(self, run_id: str) -> int: 
+        logdir = f"./results/{run_id}/*/events.out.tfevents*"
+        eventfiles = glob.glob(logdir)
+        assert len(eventfiles)>0, "TensorBoard event file not found!"
+        if len(eventfiles)>1:
+            warnings.warn("Multiple TensorBoard event files found, using the first one...")
+        eventfile = eventfiles[0]
         rew = [value.simple_value 
         for serialized_example in tf.data.TFRecordDataset(eventfile) 
             for value in event_pb2.Event.FromString(serialized_example.numpy()).summary.value 
                 if value.tag == 'Environment/Cumulative Reward']
-        return statistics.mean(rew[-self.config['realm_ai']['eval_window_size']:])
+        return statistics.mean(rew[-self.options.realm_ai.eval_window_size:])
 
 
     
