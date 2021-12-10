@@ -139,6 +139,23 @@ class MLAgentsBaseConfig:
         if 'force' in value:
             warnings.warn(f'"force":"{value["force"]}" field will be overwritten!')
 
+    @staticmethod
+    def unstructure(obj):
+        return {
+            "default_settings": obj.default_settings,
+            "env_settings": obj.env_settings,
+            "engine_settings": obj.engine_settings,
+            "environment_parameters": obj.environment_parameters,
+            "checkpoint_settings": obj.checkpoint_settings,
+            "torch_settings": obj.torch_settings,
+            "debug": obj.debug
+        } 
+
+    def to_dict(self):
+        c = cattr.Converter()
+        c.register_unstructure_hook(MLAgentsBaseConfig, MLAgentsBaseConfig.unstructure)
+        return c.unstructure(self)
+
     def find_hyperparameters_to_tune(self, algo):
         '''
         Find all hyperparameters to perform hyperparameter tuning on, 
