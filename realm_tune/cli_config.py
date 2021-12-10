@@ -33,7 +33,7 @@ def _create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Realm_AI hyperparameter optimization tool')
     parser.add_argument('--config-path', default=f'{os.path.dirname(os.path.realpath(__file__))}/default.yaml', action=DetectDefault)
     parser.add_argument('--output-path', type=str, default=None, help="Specify path where data is stored", action=DetectDefault)
-    parser.add_argument('--behavior-name', type=str, default=None, help='Name of behaviour. This can be found under the agent\'s "Behavior Parameters" component in the inspector of Unity', action=DetectDefault)
+    parser.add_argument('--behavior-name', type=str, default="RealmTune", help='Name of behaviour. This can be found under the agent\'s "Behavior Parameters" component in the inspector of Unity', action=DetectDefault)
     parser.add_argument('--algorithm', type=str, default='bayes', choices=['bayes', 'random', 'grid'], help="Algorithm for hyperparameter tuning", action=DetectDefault)
     parser.add_argument('--total-trials', type=int, default=10, help="Number of trials", action=DetectDefault)
     parser.add_argument('--warmup-trials', type=int, default=5, help="Number of warmup trials (only works for bayes algorithm)", action=DetectDefault)
