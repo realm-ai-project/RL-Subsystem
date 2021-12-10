@@ -23,9 +23,14 @@ class WandBSettings:
     wandb_group: Union[str, None] = parser.get_default('wandb_group')
     wandb_jobtype: Union[str, None] = parser.get_default('wandb_jobtype')
 
-    # def __attrs_post_init__(self): # No need, done in wandb wrapper
-    #     if self.wandb_offline:
-    #         os.environ["WANDB_MODE"]="offline"
+    def __attrs_post_init__(self):
+        if self.wandb_jobtype is None:
+            self.wandb_jobtype = "Hyperparameter Tuning"
+
+    def late_init(self, output_path:str):
+        if self.wandb_group is None:
+            self.wandb_group = output_path[output_path.rfind('/')+1:]
+        
     
     @staticmethod
     def structure(obj: Dict, _): 
@@ -74,7 +79,7 @@ class WandBSettings:
 
 @attr.s(auto_attribs=True)
 class RealmTuneBaseConfig:
-    behavior_name: Optional[str] =  attr.ib(default=parser.get_default('behavior_name'))
+    behavior_name: Optional[str] = attr.ib(default=parser.get_default('behavior_name'))
     algorithm: str = attr.ib(default=parser.get_default('algorithm'))
     total_trials: int = parser.get_default('total_trials')
     warmup_trials: int = parser.get_default('warmup_trials')
@@ -88,6 +93,7 @@ class RealmTuneBaseConfig:
         # TODO: Find behavior name from Unity env if it is not passed in
         # For now, assert that behavior name is passed in
         assert val is not None, "We need a behavior name!"
+        assert val.isalnum(), "Behavior name should be alphanumeric!"
 
     @algorithm.validator
     def _check_algorithm(self, attribute, value):
@@ -100,6 +106,8 @@ class RealmTuneBaseConfig:
     def __attrs_post_init__(self):
         if self.output_path is None:
             self.output_path = f'./runs/{self.behavior_name}_{time.strftime("%d-%m-%Y_%H-%M-%S")}' 
+        if not os.path.isdir(self.output_path):
+            os.makedirs(self.output_path)
 
 class HpTuningType(Enum):
     CATEGORICAL = auto()
@@ -202,10 +210,11 @@ class RealmTuneConfig:
         
         assert self.realm_ai.env_path == self.mlagents.env_settings['env_path'], "both environment paths should tally, bug in code!"
 
-    def _post_init_and_validate(self):
+    def __attrs_post_init__(self):
         self._validate_env_path()
         # Find hyperparameters to tune
         self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
+        self.realm_ai.wandb.late_init(self.realm_ai.output_path)
 
     @staticmethod
     def from_argparse(args: argparse.Namespace):
@@ -233,7 +242,6 @@ class RealmTuneConfig:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         
         realm_tune_config = converter.structure(config, RealmTuneConfig)
-        realm_tune_config._post_init_and_validate()
         return realm_tune_config
 
 
