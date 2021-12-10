@@ -11,6 +11,7 @@ from cattr.gen import make_dict_unstructure_fn, override
 from cattr.converters import Converter
 import wandb
 import yaml
+from mlagents_envs.environment import UnityEnvironment
 
 from realm_tune.cli_config import DetectDefault, parser
 
@@ -229,6 +230,7 @@ class RealmTuneConfig:
 
     def __attrs_post_init__(self):
         self._validate_env_path()
+        assert_singleplayer_env(self.mlagents.env_settings['env_path'])
         # Find hyperparameters to tune
         self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
         self.realm_ai.wandb.late_init(self.realm_ai.output_path)
@@ -261,6 +263,17 @@ class RealmTuneConfig:
         realm_tune_config = converter.structure(config, RealmTuneConfig)
         return realm_tune_config
 
+def assert_singleplayer_env(env_path):
+    _env = UnityEnvironment(env_path, no_graphics=True)
+    if not _env.behavior_specs:
+        _env.step()
+    try:
+        if len(_env.behavior_specs) != 1:
+            raise Exception(
+                "Realm Tune only works with single player environments for now"
+            )
+    finally:
+        _env.close()
 
 def load_yaml_file(path_to_yaml_file): 
     with open(path_to_yaml_file) as f:
