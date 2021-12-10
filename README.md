@@ -17,8 +17,7 @@ where
 - `<path_to_environment>` represents the path to the game executable 
 
 
-## [Not recommended] Training in Editor
-In a terminal, do 
-``` 
-realm-tune --behavior-name <behavior_name>
-```
+## Notes
+1. Does not support multiplayer environments (i.e., environments with >1 behaviour(s))
+2. Does not support in-editor training, must be trained on a build
+
