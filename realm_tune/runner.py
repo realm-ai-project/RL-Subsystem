@@ -103,10 +103,9 @@ class Runner:
         print(f'\nSaved {best_trial_name} to "best_trial" folder')    
         return best_trial_name
 
-def main():
-    args = parser.parse_args(["--config-path","realm_tune/bayes.yaml",])
-    runner = Runner.from_argparse(args)
+def main(args=None):
+    runner = Runner.from_argparse(parser.parse_args(args))
     runner.run()
 
 if __name__ == "__main__":
-    main()
+    main(["--config-path","realm_tune/bayes.yaml",])
