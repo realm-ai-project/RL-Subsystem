@@ -5,7 +5,7 @@ realm_ai:
   warmup_trials: 5 # optional for bayes algorithm, number of "warmup" trials where random hyperparams are used. Default val is 5
   eval_window_size: 1 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
   env_path: ../../../Unity/envs/3dball/3dball
-  output_path: runs/testtest3 # optional, specify to manually specify folder name, or to continue running
+  # output_path: runs/testtest3 # optional, specify to manually specify folder name, or to continue running
   full_run_after_tuning: # optional, if specified, config in "best_trial" folder will be changed to reflect the following. If this is specified
     max_steps: 20000 # number of steps to run for the full training
   wandb: # optional, if specified, log training metrics to wandb. 
