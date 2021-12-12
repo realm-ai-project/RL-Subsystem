@@ -13,9 +13,9 @@ from optuna.samplers import TPESampler, RandomSampler, GridSampler
 import yaml
 
 from realm_tune.hyperparam_tuner import OptunaHyperparamTuner
-from realm_tune.settings import FullRunConfig, RealmTuneConfig, WandBSettings, load_yaml_file
+from realm_tune.settings import FullRunConfig, RealmTuneConfig, WandBSettings
 from realm_tune.cli_config import parser
-from realm_tune.utils import add_wandb_config
+from realm_tune.utils import add_wandb_config, load_yaml_file
 from wandb_mlagents_wrapper.main import WandBMLAgentsWrapper
 
 class Runner:
@@ -146,7 +146,7 @@ class Runner:
 
 def main(args=None):
     runner = Runner.from_argparse(parser.parse_args(args))
-    runner.run_hyperparameter_tuning()
+    runner.run()
 
 if __name__ == "__main__":
     main(["--config-path","realm_tune/bayes.yaml",])
