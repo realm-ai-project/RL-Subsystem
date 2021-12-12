@@ -77,6 +77,22 @@ class WandBSettings:
         c.register_unstructure_hook(WandBSettings, WandBSettings.unstructure)
         return c.unstructure(self)
 
+@attr.s(auto_attribs=True)
+class FullRunConfig:
+    full_run: bool = False
+    full_run_max_steps: int = attr.ib(default=parser.get_default('full_run_max_steps'))
+
+    @staticmethod
+    def structure(obj: Dict, _): 
+        # We can do this since we'll only enter this function if full_run_after_tuning field exists in yaml or specified in cli
+        dict_ = {'full_run':True}
+        if obj is not None: # Possible that their yaml file only has a "full_run_after_training" field
+            for k, v in obj.items():
+                if k=='full_run_max_steps' or k=='max_steps':
+                    dict_['full_run_max_steps'] = v
+                else:
+                    warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
+        return FullRunConfig(**dict_)
 
 @attr.s(auto_attribs=True)
 class RealmTuneBaseConfig:
@@ -87,6 +103,7 @@ class RealmTuneBaseConfig:
     eval_window_size: int = parser.get_default('eval_window_size')
     output_path: Optional[str] = attr.ib(default=parser.get_default('output_path'))
     env_path: Optional[str] = parser.get_default('env_path')
+    full_run_after_tuning: FullRunConfig = attr.ib(factory=FullRunConfig)
     wandb: WandBSettings = attr.ib(factory=WandBSettings)
 
     @behavior_name.validator
@@ -239,7 +256,8 @@ class RealmTuneConfig:
     def from_argparse(args: argparse.Namespace):
         converter = Converter()
         converter.register_structure_hook(WandBSettings, WandBSettings.structure)
-        
+        converter.register_structure_hook(FullRunConfig, FullRunConfig.structure)
+
         # Load from file first
         config = load_yaml_file(args.config_path)
 
@@ -252,11 +270,15 @@ class RealmTuneConfig:
         for k, v in vars(args).items():
             if k in DetectDefault.non_default_args:
                 if k in attr.fields_dict(WandBSettings):
-                    if 'wandb' not in config:
+                    if 'wandb' not in config['realm_ai']:
                         config['realm_ai']['wandb'] = {}
                     config['realm_ai']['wandb'][k] = v
                 elif k in attr.fields_dict(RealmTuneBaseConfig):
                     config['realm_ai'][k] = v
+                elif k in attr.fields_dict(FullRunConfig):
+                    if 'full_run_after_tuning' not in config['realm_ai']:
+                        config['realm_ai']['full_run_after_tuning'] = {}
+                    config['realm_ai']['full_run_after_tuning'][k] = v
                 else:
                     if k != "config_path": warnings.warn(f'"{k}" field in yaml file not supported, and will be ignored')
         
@@ -287,7 +309,7 @@ if __name__=='__main__':
     # args = parser.parse_args(["--config-path","realm_tune/bayes.yaml"])
     # item = RealmTuneConfig.from_yaml_file(args.config_path)
     # print(item)
-    args = parser.parse_args(["--config-path","realm_tune/bayes.yaml",])
+    args = parser.parse_args(["--config-path","realm_tune/bayes.yaml"])
     # print(vars(args))
     config = cattr.unstructure(RealmTuneConfig.from_argparse(args))
     print(config)

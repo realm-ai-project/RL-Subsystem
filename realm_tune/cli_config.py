@@ -50,6 +50,9 @@ def _create_parser() -> argparse.ArgumentParser:
     wandb_config.add_argument('--wandb-group', type=str, default=None, action=DetectDefault)
     wandb_config.add_argument('--wandb-jobtype', type=str, default=None, action=DetectDefault)
 
+    full_run = parser.add_argument_group(title="Full run configuration")
+    full_run.add_argument('--full-run', action=DetectDefaultStoreTrue)
+    full_run.add_argument('--full-run-max-steps', type=int, default=1000000, action=DetectDefault)
     return parser
 
 parser = _create_parser()
