@@ -10,9 +10,13 @@ import warnings
 
 import optuna
 from optuna.samplers import TPESampler, RandomSampler, GridSampler
+import yaml
+
 from realm_tune.hyperparam_tuner import OptunaHyperparamTuner
-from realm_tune.settings import RealmTuneConfig, WandBSettings
+from realm_tune.settings import FullRunConfig, RealmTuneConfig, WandBSettings, load_yaml_file
 from realm_tune.cli_config import parser
+from realm_tune.utils import add_wandb_config
+from wandb_mlagents_wrapper.main import WandBMLAgentsWrapper
 
 class Runner:
     def __init__(self, options: RealmTuneConfig):
@@ -66,11 +70,19 @@ class Runner:
             search_space = {i:v for i, _, v in self.options.mlagents.hyperparameters_to_tune}
             return GridSampler(search_space)
 
-    def run(self):
-        
-        os.chdir(self.options.realm_ai.output_path)
+    def _save_best_trial(self, study):
+        trial = study.best_trial
+        best_trial_name = f"{self.options.realm_ai.behavior_name}_{trial.number}"
+        print(f"\nBest trial: {best_trial_name}")
 
-        print('Results will be stored in', os.getcwd())
+        if os.path.isdir('best_trial'):
+            shutil.rmtree('./best_trial')
+        os.mkdir('best_trial')
+        shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
+        print(f'\nSaved {best_trial_name} to "best_trial" folder') 
+        return best_trial_name
+
+    def run_hyperparameter_tuning(self):
 
         if os.path.isfile("./optuna_study.pkl"):
             study = self._restore_from_checkpoint()
@@ -91,21 +103,50 @@ class Runner:
         
         if interrupted: 
             exit(0)
-        
-        trial = study.best_trial
-        best_trial_name = f"{self.options.realm_ai.behavior_name}_{trial.number}"
-        print(f"\nBest trial: {best_trial_name}")
-
-        if os.path.isdir('best_trial'):
-            shutil.rmtree('./best_trial')
-        os.mkdir('best_trial')
-        shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
-        print(f'\nSaved {best_trial_name} to "best_trial" folder')    
+           
+        best_trial_name = self._save_best_trial(study)
         return best_trial_name
+
+    def _create_full_run_config(self, best_trial_name:str, config:FullRunConfig):
+        if os.path.isdir(f"./results/full_run"):
+            raise FileExistsError(f"Results for full run (./results/full_run) already exist, program exiting...")
+        
+        path = f"./best_trial/{best_trial_name}.yml"
+        try:
+            hyperparam = load_yaml_file(path)
+        except FileNotFoundError:
+            raise Exception(f'Could not load configuration from {path}.')
+
+        hyperparam['default_settings']['max_steps'] = config.full_run_max_steps
+        hyperparam['checkpoint_settings']['run_id'] = 'full_run'
+        hyperparam['checkpoint_settings']['resume'] = True
+        
+        if self.options.realm_ai.wandb.use_wandb:
+            add_wandb_config(hyperparam, self.options.realm_ai.wandb)
+        
+        with open("./best_trial/full_run_config.yml", 'w') as f:
+            yaml.dump(hyperparam, f, default_flow_style=False) 
+        
+        shutil.copytree(f"./results/{best_trial_name}", f"./results/full_run")
+
+    def _run_full_run_after_tuning(self, best_trial_name:str):
+        self._create_full_run_config(best_trial_name, self.options.realm_ai.full_run_after_tuning)
+
+        # Run it directly rather than in a subprocess so that interrupts are properly caught by mlagents-learn
+        WandBMLAgentsWrapper(['wandb-mlagents-learn', 'best_trial/full_run_config.yml']).run_training()
+
+    def run(self):
+        os.chdir(self.options.realm_ai.output_path)
+        print('Results will be stored in', os.getcwd())
+
+        best_trial_name = self.run_hyperparameter_tuning()
+
+        if self.options.realm_ai.full_run_after_tuning.full_run:
+            self._run_full_run_after_tuning(best_trial_name)    
 
 def main(args=None):
     runner = Runner.from_argparse(parser.parse_args(args))
-    runner.run()
+    runner.run_hyperparameter_tuning()
 
 if __name__ == "__main__":
     main(["--config-path","realm_tune/bayes.yaml",])
