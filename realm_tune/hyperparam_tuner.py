@@ -23,6 +23,7 @@ from mlagents.trainers.learn import run_cli, parse_command_line
 from mlagents_envs.environment import UnityEnvironment # We can extract behavior-name from here!
 
 from realm_tune.settings import MLAgentsBaseConfig, RealmTuneConfig, HpTuningType
+from realm_tune.utils import add_wandb_config
 
 class OptunaHyperparamTuner:
     def __init__(self, options: RealmTuneConfig):
@@ -75,7 +76,7 @@ class OptunaHyperparamTuner:
         config.checkpoint_settings['run_id'] = run_id
         config_dict = config.to_dict()
         if self.options.realm_ai.wandb.use_wandb:
-            config_dict['wandb'] = self.options.realm_ai.wandb.to_dict()
+            add_wandb_config(config_dict, self.options.realm_ai.wandb)
         with open(f'{run_id}.yml', 'w') as f:
             yaml.dump(config_dict, f, default_flow_style=False) 
 
