@@ -245,8 +245,12 @@ class RealmTuneConfig:
         
         assert self.realm_ai.env_path == self.mlagents.env_settings['env_path'], "both environment paths should tally, bug in code!"
 
+    def _convert_to_abs_path(self):
+        self.realm_ai.env_path = self.mlagents.env_settings['env_path'] = os.path.abspath(self.realm_ai.env_path)
+
     def __attrs_post_init__(self):
         self._validate_env_path()
+        self._convert_to_abs_path()
         assert_singleplayer_env(self.mlagents.env_settings['env_path'])
         # Find hyperparameters to tune
         self.mlagents.find_hyperparameters_to_tune(self.realm_ai.algorithm)
