@@ -10,6 +10,7 @@ from enum import Enum, auto
 import pickle
 import shutil
 import glob
+import warnings
 
 # import requests
 # from tensorboard import program
@@ -342,6 +343,7 @@ def configure_for_full_run(config, best_trial_name):
     shutil.copytree(f"./results/{best_trial_name}", f"./results/{config['run_id']}")
 
 def main():
+    warnings.warn("main.py is deprecated, please run runner.py instead, or use the realm-tune command", DeprecationWarning)
     args = parse_arguments()
     alg = OptunaHyperparamTuner(args)
     best_trial_name = alg.run()

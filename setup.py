@@ -16,8 +16,8 @@ setup(
     package_data={'realm_tune': ['default.yaml']},
     entry_points={
         "console_scripts": [
-            "realm-tune=realm_tune.main:main",
-            "realm-train=realm_train.main:main",
+            "realm-tune=realm_tune.runner:main",
+            # "realm-train=realm_train.main:main",
             "wandb-mlagents-learn=wandb_mlagents_wrapper.main:main",
         ]
     },
