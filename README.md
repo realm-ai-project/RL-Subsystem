@@ -21,3 +21,5 @@ where
 1. Does not support multiplayer environments (i.e., environments with >1 behaviour(s))
 2. Does not support in-editor training, must be trained on a build
 
+## Known bugs
+1. When continuing full run and using wandb, there will be multiple tensorboard files (due to resuming a run). As a result, when reporting the final result of the run to wandb, it is possible that the incorrect tensorboard file is read from.
