@@ -9,8 +9,8 @@ mlagents: # all values here (even those that are commented out) are used by the 
     trainer_type: ppo
     hyperparameters:
       batch_size: log_unif(64, 16384) # Means categorical
-      buffer_size: log_unif(2000, 50000) # Automatic detection as int
-      learning_rate: log_unif(0.0003, 0.01) # Automatic detection as float
+      buffer_size: log_unif(2048, 409600) # Automatic detection as int
+      learning_rate: log_unif(0.0001, 0.01) # Automatic detection as float
       beta: log_unif(0.001, 0.03) # unif and log_unif exclude upper bound - [0.001, 0.01)
       epsilon: 0.2
       lambd: unif(0.95, 1.0)
@@ -27,5 +27,5 @@ mlagents: # all values here (even those that are commented out) are used by the 
         strength: 1.0
     keep_checkpoints: 5
     max_steps: 100000
-    time_horizon: 1000
+    time_horizon: log_unif(32, 8192)
     summary_freq: 10000
