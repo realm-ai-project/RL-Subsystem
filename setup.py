@@ -9,7 +9,6 @@ setup(
         "mlagents",
         "optuna",
         "wandb",
-        "cattrs>=1.9.0", # older versions may not be supported
         "tensorflow>=2.0.0" # Not tested
     ],
     python_requires=">=3.7", # tested with python 3.8
