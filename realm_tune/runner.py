@@ -146,7 +146,7 @@ class Runner:
 
 def main(args=None):
     runner = Runner.from_argparse(parser.parse_args(args))
-    runner.run_hyperparameter_tuning()
+    runner.run()
 
 if __name__ == "__main__":
     main(["--config-path","realm_tune/bayes.yaml",])

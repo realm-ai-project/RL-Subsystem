@@ -7,9 +7,7 @@ import time
 
 import attr
 import cattr
-from cattr.gen import make_dict_unstructure_fn, override
 from cattr.converters import Converter
-import wandb
 import yaml
 from mlagents_envs.environment import UnityEnvironment
 
