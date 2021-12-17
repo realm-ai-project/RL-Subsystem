@@ -20,6 +20,10 @@ from wandb_mlagents_wrapper.main import WandBMLAgentsWrapper
 
 class Runner:
     NAME_OF_FULL_RUN = "best_run"
+    CONFIG_SAVE_DIR = "./trial_config"
+    BEST_TRIAL_FOLDER_NAME = "best_trial"
+    BEST_TRIAL_DIR = os.path.join(CONFIG_SAVE_DIR, BEST_TRIAL_FOLDER_NAME)
+    OPTUNA_STUDY_CKPT_NAME = "tuning_checkpoint.pkl"
 
     def __init__(self, options: RealmTuneConfig):
         self.options: RealmTuneConfig = options
@@ -44,7 +48,7 @@ class Runner:
         sampler = self._get_sampler()
         new_study = optuna.create_study(sampler=sampler, direction="maximize")
 
-        study = pickle.load( open( "optuna_study.pkl", "rb" ) )
+        study = pickle.load( open( self.OPTUNA_STUDY_CKPT_NAME, "rb" ) )
         for trial in study.trials:
             if trial.state.is_finished():
                 new_study.add_trial(trial)
@@ -77,10 +81,10 @@ class Runner:
         best_trial_name = f"{self.options.realm_ai.behavior_name}_{trial.number}"
         print(f"\nBest trial: {best_trial_name}")
 
-        if os.path.isdir('best_trial'):
-            shutil.rmtree('./best_trial')
-        os.mkdir('best_trial')
-        shutil.copyfile(f"{best_trial_name}.yml", f"./best_trial/{best_trial_name}.yml")
+        if os.path.isdir(self.BEST_TRIAL_DIR):
+            shutil.rmtree(self.BEST_TRIAL_DIR)
+        os.makedirs(self.BEST_TRIAL_DIR)
+        shutil.copyfile(os.path.join(self.CONFIG_SAVE_DIR, f"{best_trial_name}.yml"), os.path.join(self.BEST_TRIAL_DIR, f"{best_trial_name}.yml"))
         print(f'\nSaved {best_trial_name} to "best_trial" folder') 
         return best_trial_name
 
@@ -91,14 +95,14 @@ class Runner:
         else:
             study = self._run_from_scratch()
         
-        hyperparam_tuner = OptunaHyperparamTuner(self.options)
+        hyperparam_tuner = OptunaHyperparamTuner(self.options, config_save_path=self.CONFIG_SAVE_DIR)
         interrupted = False
         try:
             study.optimize(hyperparam_tuner, n_trials=self.options.realm_ai.total_trials-len(study.trials))
         except KeyboardInterrupt:
             interrupted = True
 
-        pickle.dump(study, open( "optuna_study.pkl", "wb" ) )
+        pickle.dump(study, open( self.OPTUNA_STUDY_CKPT_NAME, "wb" ) )
         print('Saved study as optuna_study.pkl')
 
         print("Number of finished trials: ", len(study.trials))
@@ -113,7 +117,7 @@ class Runner:
         if os.path.isdir(f"./results/{self.NAME_OF_FULL_RUN}"):
             raise FileExistsError(f"Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, program exiting...")
         
-        path = f"./best_trial/{best_trial_name}.yml"
+        path = os.path.join(self.BEST_TRIAL_DIR, f"{best_trial_name}.yml")
         try:
             hyperparam = load_yaml_file(path)
         except FileNotFoundError:
@@ -126,7 +130,7 @@ class Runner:
         if self.options.realm_ai.wandb.use_wandb:
             add_wandb_config(hyperparam, self.options.realm_ai.wandb)
         
-        with open(f"./best_trial/{self.NAME_OF_FULL_RUN}_config.yml", 'w') as f:
+        with open(os.path.join(self.BEST_TRIAL_DIR, f"{self.NAME_OF_FULL_RUN}_config.yml"), 'w') as f:
             yaml.dump(hyperparam, f, default_flow_style=False) 
         
         shutil.copytree(f"./results/{best_trial_name}", f"./results/{self.NAME_OF_FULL_RUN}")
@@ -135,7 +139,7 @@ class Runner:
         self._create_full_run_config(best_trial_name, self.options.realm_ai.full_run_after_tuning)
 
         # Run it directly rather than in a subprocess so that interrupts are properly caught by mlagents-learn
-        WandBMLAgentsWrapper(['wandb-mlagents-learn', f'best_trial/{self.NAME_OF_FULL_RUN}_config.yml']).run_training()
+        WandBMLAgentsWrapper(['wandb-mlagents-learn', os.path.join(self.BEST_TRIAL_DIR, f"{self.NAME_OF_FULL_RUN}_config.yml")]).run_training()
 
     def run(self):
         os.chdir(self.options.realm_ai.output_path)

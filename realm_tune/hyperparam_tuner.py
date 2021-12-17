@@ -26,10 +26,13 @@ from realm_tune.settings import MLAgentsBaseConfig, RealmTuneConfig, HpTuningTyp
 from realm_tune.utils import add_wandb_config
 
 class OptunaHyperparamTuner:
-    def __init__(self, options: RealmTuneConfig):
+
+    def __init__(self, options: RealmTuneConfig, config_save_path:str = "./trial_config/"):
         self.options: RealmTuneConfig = options
         self.hyperparameters_to_tune = self.options.mlagents.hyperparameters_to_tune
         self.hyperparams_path = self.options.mlagents.hyperparams_path
+        self.config_save_path = config_save_path
+        os.makedirs(self.config_save_path, exist_ok=True)
 
     def __call__(self, trial: optuna.trial.Trial) -> float:
         '''
@@ -60,9 +63,9 @@ class OptunaHyperparamTuner:
                 tmp_pointer = tmp_pointer[i]
             tmp_pointer[hyperparam] = val
         
-        self._create_config_file(run_id, curr_config)
+        file_dir = self._create_config_file(run_id, curr_config)
 
-        subprocess.run(["wandb-mlagents-learn", f"{run_id}.yml", "--force"])
+        subprocess.run(["wandb-mlagents-learn", file_dir, "--force"])
 
         score = self._evaluate(run_id)
         print(f'Score for trial {trial.number}: {score}')
@@ -77,8 +80,10 @@ class OptunaHyperparamTuner:
         config_dict = config.to_dict()
         if self.options.realm_ai.wandb.use_wandb:
             add_wandb_config(config_dict, self.options.realm_ai.wandb)
-        with open(f'{run_id}.yml', 'w') as f:
+        file_dir = os.path.join(self.config_save_path, f'{run_id}.yml')
+        with open(file_dir, 'w') as f:
             yaml.dump(config_dict, f, default_flow_style=False) 
+        return file_dir
 
     def _evaluate(self, run_id: str) -> int: 
         logdir = f"./results/{run_id}/*/events.out.tfevents*"
