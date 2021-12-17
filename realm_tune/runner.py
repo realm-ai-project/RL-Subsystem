@@ -62,9 +62,8 @@ class Runner:
 
         # df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
         if self.options.realm_ai.total_trials <= len(new_study.trials):
-            warning(f'{len(new_study.trials)} completed trials already found in folder "{os.getcwd()}". Exiting...')
-            exit(0)
-        print(f'Resuming from {len(new_study.trials)} completed trials')
+            warning(f'{len(new_study.trials)} completed trials already found in folder "{os.getcwd()}"')
+        else: print(f'Resuming from {len(new_study.trials)} completed trials')
         return new_study
 
     def _get_sampler(self)-> optuna.samplers.BaseSampler:
@@ -81,16 +80,14 @@ class Runner:
         best_trial_name = f"{self.options.realm_ai.behavior_name}_{trial.number}"
         print(f"\nBest trial: {best_trial_name}")
 
-        if os.path.isdir(self.BEST_TRIAL_DIR):
-            shutil.rmtree(self.BEST_TRIAL_DIR)
-        os.makedirs(self.BEST_TRIAL_DIR)
+        os.makedirs(self.BEST_TRIAL_DIR, exist_ok=True)
         shutil.copyfile(os.path.join(self.CONFIG_SAVE_DIR, f"{best_trial_name}.yml"), os.path.join(self.BEST_TRIAL_DIR, f"{best_trial_name}.yml"))
         print(f'\nSaved {best_trial_name} to "best_trial" folder') 
         return best_trial_name
 
     def run_hyperparameter_tuning(self):
 
-        if os.path.isfile("./optuna_study.pkl"):
+        if os.path.isfile(self.OPTUNA_STUDY_CKPT_NAME):
             study = self._restore_from_checkpoint()
         else:
             study = self._run_from_scratch()
@@ -103,7 +100,7 @@ class Runner:
             interrupted = True
 
         pickle.dump(study, open( self.OPTUNA_STUDY_CKPT_NAME, "wb" ) )
-        print('Saved study as optuna_study.pkl')
+        print(f'Saved study as {self.OPTUNA_STUDY_CKPT_NAME}')
 
         print("Number of finished trials: ", len(study.trials))
         
@@ -115,7 +112,8 @@ class Runner:
 
     def _create_full_run_config(self, best_trial_name:str, config:FullRunConfig):
         if os.path.isdir(f"./results/{self.NAME_OF_FULL_RUN}"):
-            raise FileExistsError(f"Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, program exiting...")
+            warning(f'Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, resuming full run...')
+            return
         
         path = os.path.join(self.BEST_TRIAL_DIR, f"{best_trial_name}.yml")
         try:
