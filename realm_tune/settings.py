@@ -97,12 +97,19 @@ class RealmTuneBaseConfig:
     behavior_name: Optional[str] = attr.ib(default=parser.get_default('behavior_name'))
     algorithm: str = attr.ib(default=parser.get_default('algorithm'))
     total_trials: int = parser.get_default('total_trials')
-    warmup_trials: int = parser.get_default('warmup_trials')
+    warmup_trials: int = attr.ib(default=parser.get_default('warmup_trials'))
     eval_window_size: int = parser.get_default('eval_window_size')
     output_path: Optional[str] = attr.ib(default=parser.get_default('output_path'))
     env_path: Optional[str] = parser.get_default('env_path')
     full_run_after_tuning: FullRunConfig = attr.ib(factory=FullRunConfig)
     wandb: WandBSettings = attr.ib(factory=WandBSettings)
+
+    @warmup_trials.validator
+    def _check_warmup_trials(self, attri, val):
+        assert isinstance(val, int)
+        assert val>=0
+        if self.algorithm != 'bayes':
+            warnings.warn(f'warmup_trials field is ignored for the currently specified algorithm: "{self.algorithm}". It can only be used by the "bayes" algorithm.')
 
     @behavior_name.validator
     def _check_behavior_name(self, attri, val):
