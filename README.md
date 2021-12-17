@@ -20,6 +20,7 @@ where
 ## Notes
 1. Does not support multiplayer environments (i.e., environments with >1 behaviour(s))
 2. Does not support in-editor training, must be trained on a build
+3. Resuming feature. If training is paused in the middle of hyperparameter tuning, the currently running trial will be discarded upon resuming. However, if training is paused in the middle of the full run, upon resuming it will automatically continue running the full run!
 
 ## Known bugs
 1. When continuing full run and using wandb, there will be multiple tensorboard files (due to resuming a run). As a result, when reporting the final result of the run to wandb, it is possible that the incorrect tensorboard file is read from.
