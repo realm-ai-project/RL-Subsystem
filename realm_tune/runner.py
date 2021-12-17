@@ -19,6 +19,8 @@ from realm_tune.utils import add_wandb_config
 from wandb_mlagents_wrapper.main import WandBMLAgentsWrapper
 
 class Runner:
+    NAME_OF_FULL_RUN = "best_run"
+
     def __init__(self, options: RealmTuneConfig):
         self.options: RealmTuneConfig = options
 
@@ -108,8 +110,8 @@ class Runner:
         return best_trial_name
 
     def _create_full_run_config(self, best_trial_name:str, config:FullRunConfig):
-        if os.path.isdir(f"./results/full_run"):
-            raise FileExistsError(f"Results for full run (./results/full_run) already exist, program exiting...")
+        if os.path.isdir(f"./results/{self.NAME_OF_FULL_RUN}"):
+            raise FileExistsError(f"Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, program exiting...")
         
         path = f"./best_trial/{best_trial_name}.yml"
         try:
@@ -118,22 +120,22 @@ class Runner:
             raise Exception(f'Could not load configuration from {path}.')
 
         hyperparam['default_settings']['max_steps'] = config.full_run_max_steps
-        hyperparam['checkpoint_settings']['run_id'] = 'full_run'
+        hyperparam['checkpoint_settings']['run_id'] = self.NAME_OF_FULL_RUN
         hyperparam['checkpoint_settings']['resume'] = True
         
         if self.options.realm_ai.wandb.use_wandb:
             add_wandb_config(hyperparam, self.options.realm_ai.wandb)
         
-        with open("./best_trial/full_run_config.yml", 'w') as f:
+        with open(f"./best_trial/{self.NAME_OF_FULL_RUN}_config.yml", 'w') as f:
             yaml.dump(hyperparam, f, default_flow_style=False) 
         
-        shutil.copytree(f"./results/{best_trial_name}", f"./results/full_run")
+        shutil.copytree(f"./results/{best_trial_name}", f"./results/{self.NAME_OF_FULL_RUN}")
 
     def _run_full_run_after_tuning(self, best_trial_name:str):
         self._create_full_run_config(best_trial_name, self.options.realm_ai.full_run_after_tuning)
 
         # Run it directly rather than in a subprocess so that interrupts are properly caught by mlagents-learn
-        WandBMLAgentsWrapper(['wandb-mlagents-learn', 'best_trial/full_run_config.yml']).run_training()
+        WandBMLAgentsWrapper(['wandb-mlagents-learn', f'best_trial/{self.NAME_OF_FULL_RUN}_config.yml']).run_training()
 
     def run(self):
         os.chdir(self.options.realm_ai.output_path)
