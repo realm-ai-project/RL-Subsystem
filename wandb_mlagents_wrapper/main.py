@@ -96,7 +96,8 @@ class WandBMLAgentsWrapper:
         eventfiles = glob.glob(logdir)
         assert len(eventfiles)>0, "TensorBoard event file not found!"
         if len(eventfiles)>1:
-            warnings.warn("Multiple TensorBoard event files found, using the first one...")
+            warnings.warn("Multiple TensorBoard event files found, sorting based on time of creation/modification...")
+            eventfiles.sort(key=lambda x: os.path.getctime(x), reverse=True)
         eventfile = eventfiles[0]
         rew = [value.simple_value 
         for serialized_example in tf.data.TFRecordDataset(eventfile) 
