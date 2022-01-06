@@ -113,9 +113,7 @@ class RealmTuneBaseConfig:
 
     @behavior_name.validator
     def _check_behavior_name(self, attri, val):
-        # TODO: Find behavior name from Unity env if it is not passed in
-        # For now, assert that behavior name is passed in
-        assert val is not None, "We need a behavior name!"
+        assert val is not None, "We need a behavior name!" 
         assert val.isalnum(), "Behavior name should be alphanumeric!"
 
     @algorithm.validator
@@ -238,7 +236,7 @@ class RealmTuneConfig:
     def _validate_env_path(self):
         # Ensure that env_path is set somewhere
         if self.realm_ai.env_path is None and 'env_path' not in self.mlagents.env_settings:
-            raise ValueError('Realm-tune does not support in-editor training! Please pass in a --config-path flag, or add env_path to yaml file under the mlagents config')
+            raise ValueError('Realm-tune does not support in-editor training! Please pass in the --env-path argument, or use --config-path and add env_path to the yaml config file')
         elif self.realm_ai.env_path is not None and 'env_path' in self.mlagents.env_settings:
             if self.realm_ai.env_path != self.mlagents.env_settings['env_path']:
                 warnings.warn(f'"env_path" parameter set under mlagents in the .yaml file will be overwritten with {self.realm_ai.env_path}')
