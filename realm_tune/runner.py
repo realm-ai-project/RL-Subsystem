@@ -110,11 +110,7 @@ class Runner:
         best_trial_name = self._save_best_trial(study)
         return best_trial_name
 
-    def _create_full_run_config(self, best_trial_name:str, config:FullRunConfig):
-        if os.path.isdir(f"./results/{self.NAME_OF_FULL_RUN}"):
-            warning(f'Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, resuming full run...')
-            return
-        
+    def _create_full_run_config(self, best_trial_name:str, config:FullRunConfig):        
         path = os.path.join(self.BEST_TRIAL_DIR, f"{best_trial_name}.yml")
         try:
             hyperparam = load_yaml_file(path)
@@ -131,7 +127,10 @@ class Runner:
         with open(os.path.join(self.BEST_TRIAL_DIR, f"{self.NAME_OF_FULL_RUN}_config.yml"), 'w') as f:
             yaml.dump(hyperparam, f, default_flow_style=False) 
         
-        shutil.copytree(f"./results/{best_trial_name}", f"./results/{self.NAME_OF_FULL_RUN}")
+        if not os.path.isdir(f"./results/{self.NAME_OF_FULL_RUN}"):
+            shutil.copytree(f"./results/{best_trial_name}", f"./results/{self.NAME_OF_FULL_RUN}")
+        else:
+            warning(f'Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, resuming full run...')
 
     def _run_full_run_after_tuning(self, best_trial_name:str):
         self._create_full_run_config(best_trial_name, self.options.realm_ai.full_run_after_tuning)
