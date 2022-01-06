@@ -16,7 +16,7 @@ wandb:
 ```
 
 ## Note
-- Resuming a run on wandb does not work (yet)
+- Resuming a run on wandb does not work (yet). Since we use the `run_id` as the name of the wandb run, we will see multiple runs with the same name when resuming a run
 - If we intend to use mlagents default parameters, it is okay to pass in a config file that solely contains wandb config (as shown above)
 - If "wandb" is not defined in the config file, wandb will not be used, and functionality will then be identical to mlagents!
 - When resuming runs, multiple tensorboard files may be present. Currently, this wrapper arbitrarily uses one of them to report the final reward to WandB
