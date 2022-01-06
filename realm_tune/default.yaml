@@ -1,6 +1,6 @@
 realm_ai:
   algorithm: bayes # or random
-  total_trials: 50 # total number of trials (inclusive of warmup_trials)
+  total_trials: 10 # total number of trials (inclusive of warmup_trials)
   warmup_trials: 5 # optional for bayes algorithm, number of "warmup" trials where random hyperparams are used. Default val is 5
   eval_window_size: 1 # optional, training run is evaluated by taking the average eps rew of past x episodes. Default val is 1
 
