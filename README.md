@@ -6,14 +6,13 @@ In a terminal, enter the following commands:
 2. `cd RL-Subsystem`
 3. `pip install -e .`
 
-## Quickstart guide 
+## Minimal quickstart guide 
 1. Build an executable of the game.
 2. In a terminal, do 
 ```
-realm-tune --behavior-name <behavior_name> --env-path <path_to_environment>
+realm-tune --env-path <path_to_environment>
 ```
 where 
-- `<behavior_name>` can be found under the agent's "Behavior Parameters" component in the Unity's inspector
 - `<path_to_environment>` represents the path to the game executable 
 
 
