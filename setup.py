@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='realm_ai',
-    version='0.0.1',
+    version='0.0.4-alpha',
     description="REALM_AI's RL Subsystem",
     install_requires=[
         "requests",  
