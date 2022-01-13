@@ -40,7 +40,7 @@ class OptunaHyperparamTuner:
         '''
         print(f'Running trial {trial.number}')
 
-        run_id = f"{self.options.realm_ai.behavior_name}_{trial.number}"
+        run_id = f"{self.options.realm_ai.behavior_name}_{trial.number}_run"
         
         curr_config = deepcopy(self.options.mlagents)
         for hyperparam, hpTuningType, values in self.hyperparameters_to_tune:
