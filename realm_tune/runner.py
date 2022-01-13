@@ -96,7 +96,7 @@ class Runner:
         interrupted = False
         try:
             study.optimize(hyperparam_tuner, n_trials=self.options.realm_ai.total_trials-len(study.trials))
-        except KeyboardInterrupt:
+        except:
             interrupted = True
 
         pickle.dump(study, open( self.OPTUNA_STUDY_CKPT_NAME, "wb" ) )
