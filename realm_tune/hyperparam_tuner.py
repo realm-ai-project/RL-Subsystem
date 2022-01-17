@@ -40,8 +40,9 @@ class OptunaHyperparamTuner:
         '''
         print(f'Running trial {trial.number}')
 
-        run_id = f"{self.options.realm_ai.behavior_name}_{trial.number}_run"
-        
+        config_filename = f"{self.options.realm_ai.behavior_name}_{trial.number}"
+        run_id = f"{config_filename}_run"
+
         curr_config = deepcopy(self.options.mlagents)
         for hyperparam, hpTuningType, values in self.hyperparameters_to_tune:
             if hpTuningType==HpTuningType.CATEGORICAL:
@@ -63,7 +64,7 @@ class OptunaHyperparamTuner:
                 tmp_pointer = tmp_pointer[i]
             tmp_pointer[hyperparam] = val
         
-        file_dir = self._create_config_file(run_id, curr_config)
+        file_dir = self._create_config_file(run_id, config_filename, curr_config)
 
         subprocess.run(["wandb-mlagents-learn", file_dir, "--force"])
 
@@ -72,7 +73,7 @@ class OptunaHyperparamTuner:
 
         return score
 
-    def _create_config_file(self, run_id: str, config: MLAgentsBaseConfig):
+    def _create_config_file(self, run_id: str, config_filename: str, config: MLAgentsBaseConfig):
         '''
         Create a config file for the given configuration
         '''
@@ -80,7 +81,7 @@ class OptunaHyperparamTuner:
         config_dict = config.to_dict()
         if self.options.realm_ai.wandb.use_wandb:
             add_wandb_config(config_dict, self.options.realm_ai.wandb)
-        file_dir = os.path.join(self.config_save_path, f'{run_id}.yml')
+        file_dir = os.path.join(self.config_save_path, f'{config_filename}.yml')
         with open(file_dir, 'w') as f:
             yaml.dump(config_dict, f, default_flow_style=False) 
         return file_dir

@@ -128,7 +128,7 @@ class Runner:
             yaml.dump(hyperparam, f, default_flow_style=False) 
         
         if not os.path.isdir(f"./results/{self.NAME_OF_FULL_RUN}"):
-            shutil.copytree(f"./results/{best_trial_name}", f"./results/{self.NAME_OF_FULL_RUN}")
+            shutil.copytree(f"./results/{best_trial_name}_run", f"./results/{self.NAME_OF_FULL_RUN}")
         else:
             warning(f'Results for full run (./results/{self.NAME_OF_FULL_RUN}) already exist, resuming full run...')
 
