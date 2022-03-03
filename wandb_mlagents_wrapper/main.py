@@ -92,7 +92,7 @@ class WandBMLAgentsWrapper:
             wandb_run.finish()
 
     def _evaluate(self, directory) -> int: 
-        logdir = f"./{directory}/*/events.out.tfevents*"
+        logdir = os.path.join(directory, "*/events.out.tfevents*")
         eventfiles = glob.glob(logdir)
         assert len(eventfiles)>0, "TensorBoard event file not found!"
         if len(eventfiles)>1:
