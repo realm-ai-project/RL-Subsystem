@@ -66,7 +66,8 @@ class OptunaHyperparamTuner:
         
         file_dir = self._create_config_file(run_id, config_filename, curr_config)
 
-        subprocess.run(["wandb-mlagents-learn", file_dir, "--force"])
+        p = subprocess.Popen(["wandb-mlagents-learn", file_dir, "--force"])
+        p.wait()
 
         score = self._evaluate(run_id)
         print(f'Score for trial {trial.number}: {score}')
